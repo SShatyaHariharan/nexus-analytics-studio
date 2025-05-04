@@ -93,7 +93,7 @@ const Layout = ({ children }: LayoutProps) => {
               <UserAvatar />
               <div className="ml-3">
                 <p className="text-sm font-medium">{user?.first_name} {user?.last_name}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{user?.role}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{user?.email}</p>
               </div>
             </div>
             <Button 
