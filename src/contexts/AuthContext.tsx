@@ -1,31 +1,21 @@
 
-import { createContext, useState, useEffect, useContext, ReactNode } from "react";
-import { toast } from "sonner";
+import React, { createContext, useState, useContext, useEffect, ReactNode } from "react";
 import api from "@/services/api";
 
+// Define types for our context
 interface User {
   id: string;
   username: string;
   email: string;
   first_name: string;
   last_name: string;
-  role: {
-    id: number;
-    name: string;
-    permissions: number;
-  };
+  role: string;
+  is_active: boolean;
 }
 
-interface AuthContextType {
-  user: User | null;
-  isLoading: boolean;
-  isAuthenticated: boolean;
-  login: (credentials: { username: string; password: string }) => Promise<void>;
-  register: (userData: RegisterData) => Promise<void>;
-  logout: () => void;
-  checkAuth: () => Promise<void>;
-  isAdmin: () => boolean;
-  hasPermission: (permission: number) => boolean;
+interface LoginData {
+  username: string;
+  password: string;
 }
 
 interface RegisterData {
@@ -36,104 +26,95 @@ interface RegisterData {
   last_name: string;
 }
 
-const AuthContext = createContext<AuthContextType>({} as AuthContextType);
+interface AuthContextType {
+  user: User | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  login: (data: LoginData) => Promise<void>;
+  register: (data: RegisterData) => Promise<void>;
+  logout: () => void;
+  updateProfile: (data: Partial<User>) => Promise<void>;
+}
 
-export const useAuth = () => useContext(AuthContext);
+// Create context
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+// Context provider component
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Check if user is already logged in
   useEffect(() => {
-    const initAuth = async () => {
-      await checkAuth();
+    const checkAuth = async () => {
+      const token = localStorage.getItem("access_token");
+      if (token) {
+        try {
+          const response = await api.get("/auth/me");
+          setUser(response.data);
+        } catch (error) {
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("refresh_token");
+        }
+      }
       setIsLoading(false);
     };
     
-    initAuth();
+    checkAuth();
   }, []);
-
-  const checkAuth = async () => {
-    try {
-      const token = localStorage.getItem("access_token");
-      
-      if (!token) {
-        setUser(null);
-        setIsAuthenticated(false);
-        return;
-      }
-      
-      const response = await api.get("/auth/me");
-      setUser(response.data);
-      setIsAuthenticated(true);
-    } catch (error) {
-      console.error("Authentication check failed:", error);
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("refresh_token");
-      setUser(null);
-      setIsAuthenticated(false);
-    }
+  
+  // Login function
+  const login = async (data: LoginData) => {
+    const response = await api.post("/auth/login", data);
+    const { access_token, refresh_token, user } = response.data;
+    
+    localStorage.setItem("access_token", access_token);
+    localStorage.setItem("refresh_token", refresh_token);
+    setUser(user);
   };
-
-  const login = async (credentials: { username: string; password: string }) => {
-    try {
-      const response = await api.post("/auth/login", credentials);
-      const { access_token, refresh_token, user } = response.data;
-      
-      localStorage.setItem("access_token", access_token);
-      localStorage.setItem("refresh_token", refresh_token);
-      
-      setUser(user);
-      setIsAuthenticated(true);
-      toast.success("Login successful");
-    } catch (error) {
-      console.error("Login failed:", error);
-      toast.error("Login failed. Please check your credentials.");
-      throw error;
-    }
+  
+  // Register function
+  const register = async (data: RegisterData) => {
+    await api.post("/auth/register", data);
   };
-
-  const register = async (userData: RegisterData) => {
-    try {
-      await api.post("/auth/register", userData);
-      toast.success("Registration successful! Please login.");
-    } catch (error) {
-      console.error("Registration failed:", error);
-      toast.error("Registration failed. Please try again.");
-      throw error;
-    }
-  };
-
+  
+  // Logout function
   const logout = () => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
     setUser(null);
-    setIsAuthenticated(false);
-    toast.info("You have been logged out");
   };
-
-  const isAdmin = () => {
-    return user?.role?.name === "Admin";
+  
+  // Update profile function
+  const updateProfile = async (data: Partial<User>) => {
+    if (!user) return;
+    
+    const response = await api.put(`/users/${user.id}`, data);
+    setUser(response.data);
   };
-
-  const hasPermission = (permission: number) => {
-    return user?.role?.permissions ? (user.role.permissions & permission) === permission : false;
+  
+  const authContextValue: AuthContextType = {
+    user,
+    isAuthenticated: !!user,
+    isLoading,
+    login,
+    register,
+    logout,
+    updateProfile,
   };
-
+  
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      isLoading, 
-      isAuthenticated, 
-      login, 
-      register, 
-      logout, 
-      checkAuth,
-      isAdmin,
-      hasPermission
-    }}>
+    <AuthContext.Provider value={authContextValue}>
       {children}
     </AuthContext.Provider>
   );
+};
+
+// Custom hook for using auth context
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
 };
