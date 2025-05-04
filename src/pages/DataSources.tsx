@@ -1,177 +1,277 @@
-
 import { useState, useEffect } from "react";
-import { 
-  Database,
-  Edit,
-  Loader2,
-  MoreHorizontal,
-  PlusCircle, 
-  Trash2
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
-import { useAuth } from "@/contexts/AuthContext";
-import api from "@/services/api";
+import { Link } from "react-router-dom";
+import { Plus, Edit, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import DataSourceDialog from "@/components/data-sources/DataSourceDialog";
 
-interface DataSource {
-  id: string;
-  name: string;
-  description: string;
-  type: string;
-  connection_params: Record<string, any>;
-  created_at: string;
-}
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useToast } from "@/components/ui/use-toast";
+
+// Define the data source schema
+const dataSourceSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(2, {
+    message: "Data source name must be at least 2 characters.",
+  }),
+  type: z.string().min(2, {
+    message: "Data source type must be at least 2 characters.",
+  }),
+  description: z.string().optional(),
+  connectionParams: z.object({
+    host: z.string().optional(),
+    port: z.string().optional(),
+    database: z.string().optional(),
+    user: z.string().optional(),
+    password: z.string().optional(),
+  }).optional(),
+});
+
+// Infer the type from the schema
+type DataSource = z.infer<typeof dataSourceSchema>;
 
 const DataSources = () => {
-  const { hasPermission } = useAuth();
-  const [dataSources, setDataSources] = useState<DataSource[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [selectedDataSource, setSelectedDataSource] = useState<DataSource | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  
-  const canCreateDataSource = hasPermission(0x0F); // Developer or higher
-  
-  useEffect(() => {
-    fetchDataSources();
-  }, []);
-  
-  const fetchDataSources = async () => {
-    try {
-      setIsLoading(true);
-      const response = await api.get("/datasources");
-      setDataSources(response.data.data || []);
-    } catch (error) {
-      console.error("Error fetching data sources:", error);
-    } finally {
-      setIsLoading(false);
+  const [dataSources, setDataSources] = useState<DataSource[]>([
+    {
+      id: "1",
+      name: "PostgreSQL",
+      type: "Database",
+      description: "Main production database",
+    },
+    {
+      id: "2",
+      name: "MongoDB",
+      type: "NoSQL Database",
+      description: "User activity logs",
+    },
+  ]);
+  const [open, setOpen] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const { toast } = useToast();
+
+  // Zod form for data source creation/editing
+  const form = useForm<DataSource>({
+    resolver: zodResolver(dataSourceSchema),
+    defaultValues: {
+      name: "",
+      type: "",
+      description: "",
+    },
+    mode: "onChange",
+  });
+
+  // Function to handle form submission
+  const onSubmit = (values: DataSource) => {
+    if (editMode) {
+      // Update existing data source
+      setDataSources(
+        dataSources.map((dataSource) =>
+          dataSource.id === values.id ? values : dataSource
+        )
+      );
+      toast({
+        title: "Success",
+        description: "Data source updated successfully.",
+      });
+    } else {
+      // Create new data source
+      const newDataSource = { ...values, id: String(Date.now()) };
+      setDataSources([...dataSources, newDataSource]);
+      toast({
+        title: "Success",
+        description: "Data source created successfully.",
+      });
+    }
+    setOpen(false);
+    form.reset();
+  };
+
+  // Function to handle data source deletion
+  const deleteDataSource = (id: string) => {
+    setDataSources(dataSources.filter((dataSource) => dataSource.id !== id));
+    toast({
+      title: "Success",
+      description: "Data source deleted successfully.",
+    });
+  };
+
+  // Function to retrieve a data source by ID
+  const getDataSource = (id: string) => {
+    return dataSources.find(source => source.id === id);
+  };
+
+  // Function to handle edit button click
+  const handleEdit = (id: string) => {
+    const dataSourceToEdit = getDataSource(id);
+    if (dataSourceToEdit) {
+      form.reset(dataSourceToEdit);
+      setEditMode(true);
+      setOpen(true);
     }
   };
-  
+
+  // Function to handle create button click
   const handleCreate = () => {
-    setSelectedDataSource(null);
-    setIsDialogOpen(true);
+    form.reset();
+    setEditMode(false);
+    setOpen(true);
   };
-  
-  const handleEdit = (dataSource: DataSource) => {
-    setSelectedDataSource(dataSource);
-    setIsDialogOpen(true);
-  };
-  
-  const handleDelete = async (id: string) => {
-    if (window.confirm("Are you sure you want to delete this data source?")) {
-      try {
-        await api.delete(`/datasources/${id}`);
-        toast.success("Data source deleted successfully");
-        fetchDataSources();
-      } catch (error) {
-        console.error("Error deleting data source:", error);
-      }
-    }
-  };
-  
-  const handleDialogClose = (refreshData: boolean) => {
-    setIsDialogOpen(false);
-    if (refreshData) {
-      fetchDataSources();
-    }
-  };
-  
-  const getTypeIcon = (type: string) => {
-    return <Database className="h-5 w-5" />;
-  };
-  
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Data Sources</h1>
-          <p className="text-muted-foreground">
-            Manage your data connections
-          </p>
-        </div>
-        {canCreateDataSource && (
-          <Button onClick={handleCreate}>
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Add Data Source
-          </Button>
-        )}
+    <div>
+      <div className="mb-4 flex justify-between">
+        <h2 className="text-2xl font-bold">Data Sources</h2>
+        <Button onClick={handleCreate}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add Data Source
+        </Button>
       </div>
-      
-      {isLoading ? (
-        <div className="flex justify-center items-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      ) : dataSources.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {dataSources.map((dataSource) => (
-            <Card key={dataSource.id}>
-              <CardHeader className="flex flex-row items-start justify-between space-y-0">
-                <div className="flex items-center space-x-2">
-                  {getTypeIcon(dataSource.type)}
-                  <div>
-                    <CardTitle>{dataSource.name}</CardTitle>
-                    <CardDescription className="text-xs uppercase">
-                      {dataSource.type}
-                    </CardDescription>
-                  </div>
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleEdit(dataSource)}>
-                      <Edit className="mr-2 h-4 w-4" />
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem 
-                      onClick={() => handleDelete(dataSource.id)}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {dataSource.description || "No description provided."}
-                </p>
-              </CardContent>
-              <CardFooter className="text-xs text-gray-500">
-                Created {new Date(dataSource.created_at).toLocaleDateString()}
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <Card className="p-6 text-center bg-muted/50">
-          <p className="text-muted-foreground mb-4">No data sources found.</p>
-          {canCreateDataSource && (
-            <Button onClick={handleCreate}>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Add Your First Data Source
-            </Button>
-          )}
-        </Card>
-      )}
-      
-      <DataSourceDialog 
-        open={isDialogOpen} 
-        onClose={handleDialogClose}
-        dataSource={selectedDataSource}
-      />
+      <div className="rounded-md border">
+        <Table>
+          <TableCaption>
+            A list of your data sources. Click on a data source to edit it.
+          </TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[100px]">ID</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {dataSources.map((dataSource) => (
+              <TableRow key={dataSource.id}>
+                <TableCell className="font-medium">{dataSource.id}</TableCell>
+                <TableCell>{dataSource.name}</TableCell>
+                <TableCell>{dataSource.type}</TableCell>
+                <TableCell>{dataSource.description}</TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleEdit(dataSource.id)}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => deleteDataSource(dataSource.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+          <TableFooter>
+            <TableRow>
+              <TableCell colSpan={5} className="text-center">
+                {dataSources.length} Data Sources
+              </TableCell>
+            </TableRow>
+          </TableFooter>
+        </Table>
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button variant="outline">Open Dialog</Button>
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>
+              {editMode ? "Edit Data Source" : "Create Data Source"}
+            </DialogTitle>
+            <DialogDescription>
+              {editMode
+                ? "Make changes to your data source here. Click save when you're done."
+                : "Add a new data source to your list. Click save when you're done."}
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Data Source Name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Type</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Data Source Type" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Data Source Description"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button type="submit">
+                {editMode ? "Update Data Source" : "Create Data Source"}
+              </Button>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

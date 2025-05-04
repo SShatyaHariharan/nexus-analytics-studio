@@ -2,7 +2,8 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from backend.app import db
-from backend.models import User, DataSource
+from backend.models.user import User
+from backend.models.data import DataSource
 
 data_sources_bp = Blueprint('data_sources', __name__)
 
@@ -42,12 +43,7 @@ def get_data_source(source_id):
 @jwt_required()
 def create_data_source():
     current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
     data = request.json
-    
-    # Check if user has permissions to create data sources
-    if not current_user.can(0x0F):  # Developer or higher
-        return jsonify({'message': 'Permission denied'}), 403
     
     # Validate required fields
     if not data.get('name') or not data.get('type'):
@@ -71,16 +67,15 @@ def create_data_source():
 @jwt_required()
 def update_data_source(source_id):
     current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
     data = request.json
-    
-    # Check if user has permissions
-    if not current_user.can(0x0F):  # Developer or higher
-        return jsonify({'message': 'Permission denied'}), 403
     
     source = DataSource.query.get(source_id)
     if not source:
         return jsonify({'message': 'Data source not found'}), 404
+    
+    # Only creator can update
+    if source.created_by != current_user_id:
+        return jsonify({'message': 'Permission denied'}), 403
     
     # Update fields
     if 'name' in data:
@@ -99,15 +94,14 @@ def update_data_source(source_id):
 @jwt_required()
 def delete_data_source(source_id):
     current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
-    
-    # Check if user has admin permissions
-    if not current_user.is_admin():
-        return jsonify({'message': 'Permission denied'}), 403
     
     source = DataSource.query.get(source_id)
     if not source:
         return jsonify({'message': 'Data source not found'}), 404
+    
+    # Only creator can delete
+    if source.created_by != current_user_id:
+        return jsonify({'message': 'Permission denied'}), 403
     
     db.session.delete(source)
     db.session.commit()
@@ -117,22 +111,11 @@ def delete_data_source(source_id):
 @data_sources_bp.route('/<source_id>/test', methods=['POST'])
 @jwt_required()
 def test_connection(source_id):
-    current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
-    
-    # Check if user has permissions
-    if not current_user.can(0x0F):  # Developer or higher
-        return jsonify({'message': 'Permission denied'}), 403
-    
     source = DataSource.query.get(source_id)
     if not source:
         return jsonify({'message': 'Data source not found'}), 404
     
-    # Here, we would implement actual connection testing based on source type
-    # For PostgreSQL, MySQL, etc., attempt to connect to the database
-    # For MongoDB, attempt to connect to the server
-    # For S3, attempt to list buckets, etc.
-    
+    # Here we would implement actual connection testing based on source type
     # For now, we'll just return a success message
     return jsonify({'message': 'Connection successful'}), 200
 
@@ -143,7 +126,7 @@ def get_tables(source_id):
     if not source:
         return jsonify({'message': 'Data source not found'}), 404
     
-    # Here, we would implement actual table retrieval based on source type
+    # Here we would implement actual table retrieval based on source type
     # For now, return a sample response
     tables = [
         {'name': 'users', 'schema': 'public', 'type': 'table'},

@@ -13,12 +13,6 @@ class Config:
     # Redis configuration
     REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
     
-    # S3 configuration
-    S3_BUCKET = os.getenv('S3_BUCKET')
-    S3_KEY = os.getenv('S3_KEY')
-    S3_SECRET = os.getenv('S3_SECRET')
-    S3_REGION = os.getenv('S3_REGION', 'us-east-1')
-    
     # Celery configuration
     CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/1')
     CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/2')
@@ -27,7 +21,7 @@ class Config:
 class DevelopmentConfig(Config):
     """Development config."""
     DEBUG = True
-    SQLALCHEMY_DATABASE_URI = os.getenv('DEV_DATABASE_URL', 'postgresql://localhost/nexus_analytics_dev')
+    SQLALCHEMY_DATABASE_URI = os.getenv('DEV_DATABASE_URL', 'postgresql://localhost/visualx_dev')
 
 
 class ProductionConfig(Config):
@@ -42,4 +36,4 @@ class ProductionConfig(Config):
 class TestingConfig(Config):
     """Testing config."""
     TESTING = True
-    SQLALCHEMY_DATABASE_URI = os.getenv('TEST_DATABASE_URL', 'postgresql://localhost/nexus_analytics_test')
+    SQLALCHEMY_DATABASE_URI = os.getenv('TEST_DATABASE_URL', 'postgresql://localhost/visualx_test')

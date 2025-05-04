@@ -6,7 +6,7 @@ from flask_jwt_extended import (
     get_jwt_identity, jwt_required
 )
 from backend.app import db
-from backend.models import User, Role
+from backend.models.user import User
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -21,16 +21,12 @@ def register():
     if User.query.filter_by(email=data.get('email')).first():
         return jsonify({'message': 'Email already exists'}), 409
     
-    # Get default role (Viewer)
-    viewer_role = Role.query.filter_by(default=True).first()
-    
     # Create new user
     new_user = User(
         username=data.get('username'),
         email=data.get('email'),
         first_name=data.get('first_name'),
         last_name=data.get('last_name'),
-        role_id=viewer_role.id
     )
     new_user.password = data.get('password')
     

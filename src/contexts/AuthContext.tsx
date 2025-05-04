@@ -9,7 +9,6 @@ interface User {
   email: string;
   first_name: string;
   last_name: string;
-  role: string;
   is_active: boolean;
 }
 
@@ -34,7 +33,6 @@ interface AuthContextType {
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => Promise<void>;
-  hasPermission: (permission: string) => boolean;
   checkAuth: () => Promise<void>;
 }
 
@@ -96,25 +94,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(response.data);
   };
   
-  // Check if user has a specific permission
-  const hasPermission = (permission: string) => {
-    if (!user) return false;
-    
-    // Basic permission check based on role
-    switch (user.role) {
-      case "admin":
-        return true;
-      case "developer":
-        return permission !== "admin_only";
-      case "analyst":
-        return ["view_data", "create_chart", "edit_chart"].includes(permission);
-      case "viewer":
-        return permission === "view_data";
-      default:
-        return false;
-    }
-  };
-  
   const authContextValue: AuthContextType = {
     user,
     isAuthenticated: !!user,
@@ -123,7 +102,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     register,
     logout,
     updateProfile,
-    hasPermission,
     checkAuth,
   };
   

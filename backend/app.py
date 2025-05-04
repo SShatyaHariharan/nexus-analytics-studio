@@ -51,6 +51,6 @@ def create_app(config_name=None):
     # Add health check endpoint
     @app.route('/health', methods=['GET'])
     def health_check():
-        return {"status": "healthy", "version": "1.0.0"}
+        return {"status": "healthy", "version": "1.0.0", "app": "VisualX"}
     
     return app
