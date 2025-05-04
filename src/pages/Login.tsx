@@ -34,7 +34,10 @@ const Login = () => {
   const onSubmit = async (data: FormData) => {
     setIsLoading(true);
     try {
-      await login(data); // Now data is guaranteed to have username and password
+      await login({
+        username: data.username,
+        password: data.password
+      });
       navigate("/dashboard");
     } catch (error) {
       // Error handling is done in the API interceptor

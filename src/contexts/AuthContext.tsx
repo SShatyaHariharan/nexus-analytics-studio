@@ -34,6 +34,8 @@ interface AuthContextType {
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => Promise<void>;
+  hasPermission: (permission: string) => boolean;
+  checkAuth: () => Promise<void>;
 }
 
 // Create context
@@ -46,22 +48,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
   // Check if user is already logged in
   useEffect(() => {
-    const checkAuth = async () => {
-      const token = localStorage.getItem("access_token");
-      if (token) {
-        try {
-          const response = await api.get("/auth/me");
-          setUser(response.data);
-        } catch (error) {
-          localStorage.removeItem("access_token");
-          localStorage.removeItem("refresh_token");
-        }
-      }
-      setIsLoading(false);
-    };
-    
     checkAuth();
   }, []);
+  
+  // Check authentication status
+  const checkAuth = async () => {
+    const token = localStorage.getItem("access_token");
+    if (token) {
+      try {
+        const response = await api.get("/auth/me");
+        setUser(response.data);
+      } catch (error) {
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("refresh_token");
+      }
+    }
+    setIsLoading(false);
+  };
   
   // Login function
   const login = async (data: LoginData) => {
@@ -93,6 +96,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(response.data);
   };
   
+  // Check if user has a specific permission
+  const hasPermission = (permission: string) => {
+    if (!user) return false;
+    
+    // Basic permission check based on role
+    switch (user.role) {
+      case "admin":
+        return true;
+      case "developer":
+        return permission !== "admin_only";
+      case "analyst":
+        return ["view_data", "create_chart", "edit_chart"].includes(permission);
+      case "viewer":
+        return permission === "view_data";
+      default:
+        return false;
+    }
+  };
+  
   const authContextValue: AuthContextType = {
     user,
     isAuthenticated: !!user,
@@ -101,6 +123,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     register,
     logout,
     updateProfile,
+    hasPermission,
+    checkAuth,
   };
   
   return (

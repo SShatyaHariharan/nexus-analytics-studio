@@ -42,7 +42,13 @@ const Register = () => {
   const onSubmit = async (data: FormData) => {
     setIsLoading(true);
     try {
-      await registerUser(data); // Now data is guaranteed to have all required fields
+      await registerUser({
+        username: data.username,
+        email: data.email,
+        password: data.password,
+        first_name: data.first_name,
+        last_name: data.last_name
+      });
       navigate("/login");
     } catch (error) {
       // Error handling is done in the API interceptor
