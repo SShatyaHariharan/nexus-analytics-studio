@@ -1,15 +1,20 @@
 
-import traceback
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from backend.app import db
-from backend.models import User, Dataset, DataSource
 import pandas as pd
+import os
+import traceback
+import sqlparse
+from flask import Blueprint, request, jsonify, current_app
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from sqlalchemy.exc import SQLAlchemyError
+from backend.app import db, cache
+from backend.models import User, Dataset, DataSource
+from backend.utils.data_processor import DataProcessor
 
 datasets_bp = Blueprint('datasets', __name__)
 
 @datasets_bp.route('/', methods=['GET'])
 @jwt_required()
+@cache.cached(timeout=60, key_prefix='datasets')
 def get_datasets():
     # Get query parameters for pagination and filtering
     page = request.args.get('page', 1, type=int)
@@ -32,6 +37,7 @@ def get_datasets():
 
 @datasets_bp.route('/<dataset_id>', methods=['GET'])
 @jwt_required()
+@cache.cached(timeout=60, key_prefix=lambda: f'dataset_{request.view_args["dataset_id"]}')
 def get_dataset(dataset_id):
     dataset = Dataset.query.get(dataset_id)
     
@@ -44,12 +50,7 @@ def get_dataset(dataset_id):
 @jwt_required()
 def create_dataset():
     current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
     data = request.json
-    
-    # Check if user has permissions
-    if not current_user.can(0x07):  # Analyst or higher
-        return jsonify({'message': 'Permission denied'}), 403
     
     # Validate required fields
     if not data.get('name') or not data.get('source_id'):
@@ -60,6 +61,21 @@ def create_dataset():
     if not source:
         return jsonify({'message': 'Data source not found'}), 404
     
+    # If SQL query is provided, validate it
+    if data.get('query'):
+        try:
+            # Parse SQL to check syntax
+            parsed = sqlparse.parse(data.get('query'))
+            if not parsed:
+                return jsonify({'message': 'Invalid SQL query'}), 400
+                
+            # Check if it's a SELECT query
+            statement = parsed[0]
+            if statement.get_type() != 'SELECT':
+                return jsonify({'message': 'Only SELECT queries are allowed'}), 400
+        except Exception as e:
+            return jsonify({'message': f'Error parsing SQL query: {str(e)}'}), 400
+    
     # Create new dataset
     new_dataset = Dataset(
         name=data.get('name'),
@@ -69,11 +85,15 @@ def create_dataset():
         query=data.get('query'),
         table_name=data.get('table_name'),
         tags=data.get('tags'),
+        pii_columns=data.get('pii_columns'),
         created_by=current_user_id
     )
     
     db.session.add(new_dataset)
     db.session.commit()
+    
+    # Invalidate cache
+    cache.delete('datasets')
     
     return jsonify(new_dataset.to_dict()), 201
 
@@ -81,16 +101,26 @@ def create_dataset():
 @jwt_required()
 def update_dataset(dataset_id):
     current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
     data = request.json
-    
-    # Check if user has permissions
-    if not current_user.can(0x07):  # Analyst or higher
-        return jsonify({'message': 'Permission denied'}), 403
     
     dataset = Dataset.query.get(dataset_id)
     if not dataset:
         return jsonify({'message': 'Dataset not found'}), 404
+    
+    # If SQL query is updated, validate it
+    if 'query' in data:
+        try:
+            # Parse SQL to check syntax
+            parsed = sqlparse.parse(data.get('query'))
+            if not parsed:
+                return jsonify({'message': 'Invalid SQL query'}), 400
+                
+            # Check if it's a SELECT query
+            statement = parsed[0]
+            if statement.get_type() != 'SELECT':
+                return jsonify({'message': 'Only SELECT queries are allowed'}), 400
+        except Exception as e:
+            return jsonify({'message': f'Error parsing SQL query: {str(e)}'}), 400
     
     # Update fields
     if 'name' in data:
@@ -105,19 +135,21 @@ def update_dataset(dataset_id):
         dataset.schema = data.get('schema')
     if 'tags' in data:
         dataset.tags = data.get('tags')
+    if 'pii_columns' in data:
+        dataset.pii_columns = data.get('pii_columns')
     
     db.session.commit()
+    
+    # Invalidate cache
+    cache.delete('datasets')
+    cache.delete(f'dataset_{dataset_id}')
+    
     return jsonify(dataset.to_dict()), 200
 
 @datasets_bp.route('/<dataset_id>', methods=['DELETE'])
 @jwt_required()
 def delete_dataset(dataset_id):
     current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
-    
-    # Check if user has permissions
-    if not current_user.can(0x0F):  # Developer or higher
-        return jsonify({'message': 'Permission denied'}), 403
     
     dataset = Dataset.query.get(dataset_id)
     if not dataset:
@@ -126,10 +158,15 @@ def delete_dataset(dataset_id):
     db.session.delete(dataset)
     db.session.commit()
     
+    # Invalidate cache
+    cache.delete('datasets')
+    cache.delete(f'dataset_{dataset_id}')
+    
     return jsonify({'message': 'Dataset deleted successfully'}), 200
 
 @datasets_bp.route('/<dataset_id>/preview', methods=['GET'])
 @jwt_required()
+@cache.cached(timeout=120, key_prefix=lambda: f'dataset_preview_{request.view_args["dataset_id"]}')
 def preview_dataset(dataset_id):
     # Optional parameter for limiting rows
     limit = min(request.args.get('limit', 100, type=int), 1000)
@@ -139,106 +176,118 @@ def preview_dataset(dataset_id):
         return jsonify({'message': 'Dataset not found'}), 404
     
     try:
-        # Here, we would actually query the data source
-        # Simplified example for demonstration
-        if dataset.query:
-            # Execute SQL query with limit
-            query = f"{dataset.query} LIMIT {limit}"
-            # In a real implementation, we would connect to the data source
-            # and execute the query
-            
-            # For now, return sample data
-            data = {
-                'columns': ['id', 'name', 'value', 'date'],
-                'rows': [
-                    [1, 'Item 1', 100, '2023-01-01'],
-                    [2, 'Item 2', 200, '2023-01-02'],
-                    [3, 'Item 3', 300, '2023-01-03']
-                ]
-            }
-        elif dataset.table_name:
-            # Query directly from table
-            # In a real implementation, we would connect to the data source
-            # and execute a SELECT query on the table
-            
-            # For now, return sample data
-            data = {
-                'columns': ['id', 'name', 'value', 'date'],
-                'rows': [
-                    [1, 'Item 1', 100, '2023-01-01'],
-                    [2, 'Item 2', 200, '2023-01-02'],
-                    [3, 'Item 3', 300, '2023-01-03']
-                ]
-            }
-        else:
-            return jsonify({'message': 'Dataset does not have a query or table definition'}), 400
+        # Get the data source
+        source = DataSource.query.get(dataset.source_id)
+        if not source:
+            return jsonify({'message': 'Data source not found'}), 404
         
-        return jsonify(data), 200
+        # Process based on source type and dataset definition
+        if source.type == 'file' and source.connection_params and 'file_path' in source.connection_params:
+            file_path = source.connection_params['file_path']
+            if not os.path.exists(file_path):
+                return jsonify({'message': 'File not found'}), 404
+            
+            file_type = source.connection_params.get('file_type', 'csv')
+            
+            # Read the file
+            if file_type == 'csv':
+                df = pd.read_csv(file_path)
+            elif file_type in ['xls', 'xlsx']:
+                df = pd.read_excel(file_path)
+            elif file_type == 'json':
+                df = pd.read_json(file_path)
+            else:
+                return jsonify({'message': 'Unsupported file type'}), 400
+            
+            # Apply query if present
+            if dataset.query:
+                processor = DataProcessor()
+                df = processor.process_query(df, dataset.query)
+            
+            # Apply limit
+            df = df.head(limit)
+            
+            # Return data
+            data = {
+                'columns': df.columns.tolist(),
+                'rows': df.values.tolist(),
+                'total_rows': len(df)
+            }
+            
+            return jsonify(data), 200
+        else:
+            return jsonify({'message': 'Preview not available for this data source type'}), 400
     
     except Exception as e:
         traceback.print_exc()
         return jsonify({'message': f'Error previewing dataset: {str(e)}'}), 500
 
-@datasets_bp.route('/upload', methods=['POST'])
+@datasets_bp.route('/execute-query', methods=['POST'])
 @jwt_required()
-def upload_file():
-    current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
+def execute_query():
+    data = request.json
     
-    # Check if user has permissions
-    if not current_user.can(0x07):  # Analyst or higher
-        return jsonify({'message': 'Permission denied'}), 403
+    if not data.get('source_id'):
+        return jsonify({'message': 'Source ID is required'}), 400
     
-    if 'file' not in request.files:
-        return jsonify({'message': 'No file provided'}), 400
+    if not data.get('query'):
+        return jsonify({'message': 'Query is required'}), 400
     
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'message': 'No file selected'}), 400
+    source = DataSource.query.get(data.get('source_id'))
+    if not source:
+        return jsonify({'message': 'Data source not found'}), 404
     
     try:
-        # Check file type
-        if file.filename.endswith('.csv'):
-            df = pd.read_csv(file)
-        elif file.filename.endswith(('.xls', '.xlsx')):
-            df = pd.read_excel(file)
-        elif file.filename.endswith('.json'):
-            df = pd.read_json(file)
+        # Parse SQL to check syntax
+        parsed = sqlparse.parse(data.get('query'))
+        if not parsed:
+            return jsonify({'message': 'Invalid SQL query'}), 400
+            
+        # Check if it's a SELECT query
+        statement = parsed[0]
+        if statement.get_type() != 'SELECT':
+            return jsonify({'message': 'Only SELECT queries are allowed'}), 400
+        
+        # Execute query
+        if source.type == 'file' and source.connection_params and 'file_path' in source.connection_params:
+            file_path = source.connection_params['file_path']
+            if not os.path.exists(file_path):
+                return jsonify({'message': 'File not found'}), 404
+            
+            file_type = source.connection_params.get('file_type', 'csv')
+            
+            # Read the file
+            if file_type == 'csv':
+                df = pd.read_csv(file_path)
+            elif file_type in ['xls', 'xlsx']:
+                df = pd.read_excel(file_path)
+            elif file_type == 'json':
+                df = pd.read_json(file_path)
+            else:
+                return jsonify({'message': 'Unsupported file type'}), 400
+            
+            # Apply query
+            processor = DataProcessor()
+            result_df = processor.process_query(df, data.get('query'))
+            
+            # Generate schema
+            schema = []
+            for column in result_df.columns:
+                schema.append({
+                    'name': column,
+                    'type': str(result_df[column].dtype)
+                })
+            
+            # Return result with schema
+            return jsonify({
+                'columns': result_df.columns.tolist(),
+                'rows': result_df.head(100).values.tolist(),
+                'total_rows': len(result_df),
+                'schema': schema
+            }), 200
         else:
-            return jsonify({'message': 'Unsupported file format'}), 400
-        
-        # Generate schema from DataFrame
-        schema = []
-        for column in df.columns:
-            dtype = str(df[column].dtype)
-            schema.append({
-                'name': column,
-                'type': dtype,
-                'nullable': df[column].isna().any()
-            })
-        
-        # Sample data
-        sample_data = df.head(5).values.tolist()
-        
-        # Detect potential PII columns
-        pii_columns = []
-        # Simple detection based on column names
-        pii_keywords = ['name', 'email', 'phone', 'address', 'ssn', 'social', 'birth', 'credit', 'passport']
-        for column in df.columns:
-            for keyword in pii_keywords:
-                if keyword in column.lower():
-                    pii_columns.append(column)
-                    break
-        
-        return jsonify({
-            'filename': file.filename,
-            'rows': len(df),
-            'columns': len(df.columns),
-            'schema': schema,
-            'sample': sample_data,
-            'pii_columns': pii_columns
-        }), 200
+            return jsonify({'message': 'Query execution not available for this data source type'}), 400
     
     except Exception as e:
         traceback.print_exc()
-        return jsonify({'message': f'Error processing file: {str(e)}'}), 500
+        return jsonify({'message': f'Error executing query: {str(e)}'}), 500

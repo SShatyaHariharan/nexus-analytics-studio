@@ -5,7 +5,7 @@ from flask_jwt_extended import (
     create_access_token, create_refresh_token, 
     get_jwt_identity, jwt_required
 )
-from backend.app import db
+from backend.app import db, cache
 from backend.models.user import User
 
 auth_bp = Blueprint('auth', __name__)
@@ -27,6 +27,7 @@ def register():
         email=data.get('email'),
         first_name=data.get('first_name'),
         last_name=data.get('last_name'),
+        role=data.get('role', 'user')  # Default role is 'user'
     )
     new_user.password = data.get('password')
     
@@ -73,6 +74,7 @@ def refresh():
 
 @auth_bp.route('/me', methods=['GET'])
 @jwt_required()
+@cache.cached(timeout=60, key_prefix='user_me')
 def get_current_user():
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
@@ -94,5 +96,8 @@ def change_password():
     
     user.password = data.get('new_password')
     db.session.commit()
+    
+    # Invalidate cache
+    cache.delete('user_me')
     
     return jsonify({'message': 'Password changed successfully'}), 200

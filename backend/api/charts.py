@@ -1,13 +1,14 @@
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from backend.app import db
+from backend.app import db, cache
 from backend.models import User, Chart, Dataset
 
 charts_bp = Blueprint('charts', __name__)
 
 @charts_bp.route('/', methods=['GET'])
 @jwt_required()
+@cache.cached(timeout=60, key_prefix='charts')
 def get_charts():
     # Get query parameters for pagination and filtering
     page = request.args.get('page', 1, type=int)
@@ -35,6 +36,7 @@ def get_charts():
 
 @charts_bp.route('/<chart_id>', methods=['GET'])
 @jwt_required()
+@cache.cached(timeout=60, key_prefix=lambda: f'chart_{request.view_args["chart_id"]}')
 def get_chart(chart_id):
     chart = Chart.query.get(chart_id)
     
@@ -47,12 +49,7 @@ def get_chart(chart_id):
 @jwt_required()
 def create_chart():
     current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
     data = request.json
-    
-    # Check if user has permissions
-    if not current_user.can(0x07):  # Analyst or higher
-        return jsonify({'message': 'Permission denied'}), 403
     
     # Validate required fields
     if not data.get('name') or not data.get('dataset_id') or not data.get('chart_type'):
@@ -77,18 +74,16 @@ def create_chart():
     db.session.add(new_chart)
     db.session.commit()
     
+    # Invalidate cache
+    cache.delete('charts')
+    
     return jsonify(new_chart.to_dict()), 201
 
 @charts_bp.route('/<chart_id>', methods=['PUT'])
 @jwt_required()
 def update_chart(chart_id):
     current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
     data = request.json
-    
-    # Check if user has permissions
-    if not current_user.can(0x07):  # Analyst or higher
-        return jsonify({'message': 'Permission denied'}), 403
     
     chart = Chart.query.get(chart_id)
     if not chart:
@@ -107,17 +102,18 @@ def update_chart(chart_id):
         chart.query_params = data.get('query_params')
     
     db.session.commit()
+    
+    # Invalidate cache
+    cache.delete('charts')
+    cache.delete(f'chart_{chart_id}')
+    cache.delete(f'chart_data_{chart_id}')
+    
     return jsonify(chart.to_dict()), 200
 
 @charts_bp.route('/<chart_id>', methods=['DELETE'])
 @jwt_required()
 def delete_chart(chart_id):
     current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
-    
-    # Check if user has permissions
-    if not current_user.can(0x07):  # Analyst or higher
-        return jsonify({'message': 'Permission denied'}), 403
     
     chart = Chart.query.get(chart_id)
     if not chart:
@@ -126,54 +122,103 @@ def delete_chart(chart_id):
     db.session.delete(chart)
     db.session.commit()
     
+    # Invalidate cache
+    cache.delete('charts')
+    cache.delete(f'chart_{chart_id}')
+    cache.delete(f'chart_data_{chart_id}')
+    
     return jsonify({'message': 'Chart deleted successfully'}), 200
 
 @charts_bp.route('/<chart_id>/data', methods=['GET'])
 @jwt_required()
+@cache.cached(timeout=300, key_prefix=lambda: f'chart_data_{request.view_args["chart_id"]}')
 def get_chart_data(chart_id):
     chart = Chart.query.get(chart_id)
     
     if not chart:
         return jsonify({'message': 'Chart not found'}), 404
     
-    # Here, we would execute the query with the chart's query parameters
-    # and return the data in a format suitable for the chart type
+    # Get the dataset
+    dataset = Dataset.query.get(chart.dataset_id)
+    if not dataset:
+        return jsonify({'message': 'Dataset not found'}), 404
     
-    # Sample data for different chart types
-    if chart.chart_type == 'bar':
-        data = {
-            'labels': ['Category 1', 'Category 2', 'Category 3', 'Category 4', 'Category 5'],
-            'datasets': [{
-                'label': 'Values',
-                'data': [65, 59, 80, 81, 56]
-            }]
-        }
-    elif chart.chart_type == 'line':
-        data = {
-            'labels': ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-            'datasets': [{
-                'label': 'Series 1',
-                'data': [12, 19, 3, 5, 2, 3]
-            }, {
-                'label': 'Series 2',
-                'data': [5, 10, 15, 7, 8, 12]
-            }]
-        }
-    elif chart.chart_type == 'pie':
-        data = {
-            'labels': ['Red', 'Blue', 'Yellow', 'Green', 'Purple'],
-            'datasets': [{
-                'data': [300, 50, 100, 40, 120]
-            }]
-        }
-    else:
-        # Default data for other chart types
-        data = {
-            'labels': ['Label 1', 'Label 2', 'Label 3'],
-            'datasets': [{
-                'label': 'Default',
-                'data': [10, 20, 30]
-            }]
-        }
+    try:
+        # Get the data source
+        source = DataSource.query.get(dataset.source_id)
+        if not source:
+            return jsonify({'message': 'Data source not found'}), 404
+        
+        # Apply filters from request if available
+        filters = request.args.get('filters', {})
+        if isinstance(filters, str):
+            import json
+            try:
+                filters = json.loads(filters)
+            except:
+                filters = {}
+        
+        # Apply any chart-specific filters from query_params
+        if chart.query_params and 'filters' in chart.query_params:
+            # Merge with request filters
+            for key, value in chart.query_params['filters'].items():
+                if key not in filters:
+                    filters[key] = value
+        
+        # Process data based on chart type and configuration
+        # Return sample data for now
+        if chart.chart_type == 'bar':
+            data = {
+                'labels': ['Category 1', 'Category 2', 'Category 3', 'Category 4', 'Category 5'],
+                'datasets': [{
+                    'label': 'Values',
+                    'data': [65, 59, 80, 81, 56]
+                }]
+            }
+        elif chart.chart_type == 'line':
+            data = {
+                'labels': ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                'datasets': [{
+                    'label': 'Series 1',
+                    'data': [12, 19, 3, 5, 2, 3]
+                }, {
+                    'label': 'Series 2',
+                    'data': [5, 10, 15, 7, 8, 12]
+                }]
+            }
+        elif chart.chart_type == 'pie':
+            data = {
+                'labels': ['Red', 'Blue', 'Yellow', 'Green', 'Purple'],
+                'datasets': [{
+                    'data': [300, 50, 100, 40, 120]
+                }]
+            }
+        elif chart.chart_type == 'scatter':
+            data = {
+                'datasets': [{
+                    'label': 'Scatter Dataset',
+                    'data': [
+                        { 'x': -10, 'y': 0 },
+                        { 'x': 0, 'y': 10 },
+                        { 'x': 10, 'y': 5 },
+                        { 'x': 0.5, 'y': 5.5 }
+                    ]
+                }]
+            }
+        else:
+            # Default data for other chart types
+            data = {
+                'labels': ['Label 1', 'Label 2', 'Label 3'],
+                'datasets': [{
+                    'label': 'Default',
+                    'data': [10, 20, 30]
+                }]
+            }
+        
+        return jsonify(data), 200
     
-    return jsonify(data), 200
+    except Exception as e:
+        return jsonify({'message': f'Error getting chart data: {str(e)}'}), 500
+
+# Missing import at the top
+from backend.models.data import DataSource

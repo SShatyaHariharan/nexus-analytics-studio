@@ -5,25 +5,29 @@ from flask_cors import CORS
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager
+from flask_caching import Cache
 
 # Initialize core extensions
 db = SQLAlchemy()
 migrate = Migrate()
 jwt = JWTManager()
+cache = Cache()
 
-def create_app(config_name=None):
+def create_app():
     app = Flask(__name__)
     
     # Load configuration
-    if config_name is None:
-        config_name = os.getenv('FLASK_CONFIG', 'development')
-    
-    if config_name == 'production':
-        app.config.from_object('config.ProductionConfig')
-    elif config_name == 'testing':
-        app.config.from_object('config.TestingConfig')
-    else:
-        app.config.from_object('config.DevelopmentConfig')
+    app.config.update(
+        SQLALCHEMY_DATABASE_URI=os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost/visualx'),
+        SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        JWT_SECRET_KEY=os.getenv('JWT_SECRET_KEY', 'dev-secret-key'),
+        JWT_ACCESS_TOKEN_EXPIRES=60*60,  # 1 hour
+        JWT_REFRESH_TOKEN_EXPIRES=30*24*60*60,  # 30 days
+        CACHE_TYPE='redis',
+        CACHE_REDIS_URL=os.getenv('REDIS_URL', 'redis://localhost:6379/0'),
+        CACHE_DEFAULT_TIMEOUT=300,
+        MAX_CONTENT_LENGTH=16*1024*1024  # 16MB max upload size
+    )
     
     # Enable CORS
     CORS(app, resources={r"/*": {"origins": "*"}})
@@ -32,6 +36,7 @@ def create_app(config_name=None):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
+    cache.init_app(app)
     
     # Register blueprints
     from backend.api.auth import auth_bp

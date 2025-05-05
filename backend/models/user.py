@@ -13,6 +13,7 @@ class User(db.Model):
     password_hash = db.Column(db.String(256))
     first_name = db.Column(db.String(64))
     last_name = db.Column(db.String(64))
+    role = db.Column(db.String(20), default='user')  # admin, analyst, user
     is_active = db.Column(db.Boolean, default=True)
     last_login = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -33,6 +34,9 @@ class User(db.Model):
         
     def verify_password(self, password):
         return check_password_hash(self.password_hash, password)
+    
+    def has_role(self, role):
+        return self.role == role
             
     def to_dict(self):
         return {
@@ -41,6 +45,7 @@ class User(db.Model):
             'email': self.email,
             'first_name': self.first_name,
             'last_name': self.last_name,
+            'role': self.role,
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'last_login': self.last_login.isoformat() if self.last_login else None

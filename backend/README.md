@@ -1,26 +1,9 @@
 
-# Nexus Analytics Studio Backend
+# VisualX Backend API
 
-This is the Flask backend for Nexus Analytics Studio, a data analytics and visualization platform.
+This is the backend API for the VisualX data visualization and analytics platform.
 
-## Features
-
-- User authentication and role-based access control
-- Data source management
-- Dataset creation and management
-- Chart generation and configuration
-- Dashboard building with drag-and-drop layout
-- Collaboration features including comments and shared dashboards
-
-## Setup Instructions
-
-### Prerequisites
-
-- Python 3.8+
-- PostgreSQL
-- Redis (for caching and Celery tasks)
-
-### Installation
+## Setup
 
 1. Clone the repository
 2. Create a virtual environment:
@@ -32,74 +15,394 @@ This is the Flask backend for Nexus Analytics Studio, a data analytics and visua
    ```
    pip install -r requirements.txt
    ```
-4. Create a `.env` file based on `.env.example`
-5. Initialize the database:
+4. Set up PostgreSQL and Redis
+5. Download sample car sales data from [Kaggle](https://www.kaggle.com/datasets/gagandeep16/car-sales) and save it to `backend/sample_data/car_sales.csv`
+6. Initialize the database:
    ```
-   flask db init
-   flask db migrate -m "Initial migration"
-   flask db upgrade
+   python init_db.py
    ```
-6. Run the development server:
+7. Run the application:
    ```
-   flask run
+   python run.py
    ```
 
 ## API Documentation
 
 ### Authentication
 
-- `POST /api/auth/register` - Register a new user
-- `POST /api/auth/login` - Login and receive JWT tokens
-- `POST /api/auth/refresh` - Refresh access token
-- `GET /api/auth/me` - Get current user information
+#### Register User
 
-### Users
+```
+POST /api/auth/register
 
-- `GET /api/users/` - Get all users (admin only)
-- `GET /api/users/<user_id>` - Get user information
-- `PUT /api/users/<user_id>` - Update user information
-- `DELETE /api/users/<user_id>` - Delete a user (admin only)
-- `GET /api/users/roles` - Get all available roles (admin only)
+Request:
+{
+  "username": "johndoe",
+  "email": "john@example.com",
+  "password": "securepass",
+  "first_name": "John",
+  "last_name": "Doe",
+  "role": "user"  // Optional, defaults to "user"
+}
+
+Response:
+{
+  "message": "User registered successfully"
+}
+```
+
+#### Login
+
+```
+POST /api/auth/login
+
+Request:
+{
+  "username": "johndoe",  // or email
+  "password": "securepass"
+}
+
+Response:
+{
+  "access_token": "eyJ...",
+  "refresh_token": "eyJ...",
+  "user": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "username": "johndoe",
+    "email": "john@example.com",
+    "first_name": "John",
+    "last_name": "Doe",
+    "role": "user",
+    "is_active": true,
+    "created_at": "2023-01-01T00:00:00",
+    "last_login": "2023-01-02T00:00:00"
+  }
+}
+```
 
 ### Data Sources
 
-- `GET /api/datasources/` - Get all data sources
-- `GET /api/datasources/<source_id>` - Get data source details
-- `POST /api/datasources/` - Create a new data source
-- `PUT /api/datasources/<source_id>` - Update a data source
-- `DELETE /api/datasources/<source_id>` - Delete a data source
-- `POST /api/datasources/<source_id>/test` - Test data source connection
-- `GET /api/datasources/<source_id>/tables` - List tables in data source
+#### List Data Sources
+
+```
+GET /api/datasources?page=1&per_page=20
+
+Response:
+{
+  "data": [
+    {
+      "id": "123e4567-e89b-12d3-a456-426614174000",
+      "name": "Sample Car Sales",
+      "description": "Sample car sales data from Kaggle",
+      "type": "file",
+      "created_by": "123e4567-e89b-12d3-a456-426614174001",
+      "created_at": "2023-01-01T00:00:00",
+      "updated_at": "2023-01-01T00:00:00"
+    }
+  ],
+  "total": 1,
+  "pages": 1,
+  "page": 1,
+  "per_page": 20
+}
+```
+
+#### Get Data Source
+
+```
+GET /api/datasources/{source_id}
+
+Response:
+{
+  "id": "123e4567-e89b-12d3-a456-426614174000",
+  "name": "Sample Car Sales",
+  "description": "Sample car sales data from Kaggle",
+  "type": "file",
+  "created_by": "123e4567-e89b-12d3-a456-426614174001",
+  "created_at": "2023-01-01T00:00:00",
+  "updated_at": "2023-01-01T00:00:00"
+}
+```
+
+#### Create Data Source (JSON)
+
+```
+POST /api/datasources
+
+Request:
+{
+  "name": "New Data Source",
+  "description": "Description of the data source",
+  "type": "database",
+  "connection_params": {
+    "host": "localhost",
+    "port": "5432",
+    "database": "mydb",
+    "user": "user",
+    "password": "password"
+  }
+}
+
+Response:
+{
+  "id": "123e4567-e89b-12d3-a456-426614174002",
+  "name": "New Data Source",
+  "description": "Description of the data source",
+  "type": "database",
+  "created_by": "123e4567-e89b-12d3-a456-426614174001",
+  "created_at": "2023-01-01T00:00:00",
+  "updated_at": "2023-01-01T00:00:00"
+}
+```
+
+#### Create Data Source (File Upload)
+
+```
+POST /api/datasources
+Content-Type: multipart/form-data
+
+Form Fields:
+- name: "Sales Data"
+- description: "Monthly sales data"
+- file: [file upload]
+
+Response:
+{
+  "id": "123e4567-e89b-12d3-a456-426614174003",
+  "name": "Sales Data",
+  "description": "Monthly sales data",
+  "type": "file",
+  "connection_params": {
+    "file_path": "/path/to/uploaded/file.csv",
+    "file_type": "csv",
+    "rows": 1000,
+    "columns": 10
+  },
+  "created_by": "123e4567-e89b-12d3-a456-426614174001",
+  "created_at": "2023-01-01T00:00:00",
+  "updated_at": "2023-01-01T00:00:00",
+  "file_info": {
+    "rows": 1000,
+    "columns": 10,
+    "column_types": [...],
+    "pii_columns": [...],
+    "sample_data": [...]
+  }
+}
+```
 
 ### Datasets
 
-- `GET /api/datasets/` - Get all datasets
-- `GET /api/datasets/<dataset_id>` - Get dataset details
-- `POST /api/datasets/` - Create a new dataset
-- `PUT /api/datasets/<dataset_id>` - Update a dataset
-- `DELETE /api/datasets/<dataset_id>` - Delete a dataset
-- `GET /api/datasets/<dataset_id>/preview` - Preview dataset data
-- `POST /api/datasets/upload` - Upload a file for dataset creation
+#### List Datasets
+
+```
+GET /api/datasets?page=1&per_page=20
+
+Response:
+{
+  "data": [...],
+  "total": 10,
+  "pages": 1,
+  "page": 1,
+  "per_page": 20
+}
+```
+
+#### Create Dataset
+
+```
+POST /api/datasets
+
+Request:
+{
+  "name": "Car Sales Analysis",
+  "description": "Filtered car sales data",
+  "source_id": "123e4567-e89b-12d3-a456-426614174000",
+  "query": "SELECT Make, Model, Year, Price FROM car_sales WHERE Year > 2018",
+  "tags": ["sales", "cars", "analysis"]
+}
+
+Response:
+{
+  "id": "123e4567-e89b-12d3-a456-426614174004",
+  "name": "Car Sales Analysis",
+  "description": "Filtered car sales data",
+  "source_id": "123e4567-e89b-12d3-a456-426614174000",
+  "query": "SELECT Make, Model, Year, Price FROM car_sales WHERE Year > 2018",
+  "tags": ["sales", "cars", "analysis"],
+  "created_by": "123e4567-e89b-12d3-a456-426614174001",
+  "created_at": "2023-01-01T00:00:00",
+  "updated_at": "2023-01-01T00:00:00"
+}
+```
+
+#### Execute Query
+
+```
+POST /api/datasets/execute-query
+
+Request:
+{
+  "source_id": "123e4567-e89b-12d3-a456-426614174000",
+  "query": "SELECT Make, Model, AVG(Price) as AvgPrice FROM car_sales GROUP BY Make, Model"
+}
+
+Response:
+{
+  "columns": ["Make", "Model", "AvgPrice"],
+  "rows": [...],
+  "total_rows": 50,
+  "schema": [
+    {"name": "Make", "type": "object"},
+    {"name": "Model", "type": "object"},
+    {"name": "AvgPrice", "type": "float64"}
+  ]
+}
+```
 
 ### Charts
 
-- `GET /api/charts/` - Get all charts
-- `GET /api/charts/<chart_id>` - Get chart details
-- `POST /api/charts/` - Create a new chart
-- `PUT /api/charts/<chart_id>` - Update a chart
-- `DELETE /api/charts/<chart_id>` - Delete a chart
-- `GET /api/charts/<chart_id>/data` - Get data for a chart
+#### Create Chart
+
+```
+POST /api/charts
+
+Request:
+{
+  "name": "Average Car Prices by Make",
+  "description": "Bar chart showing average prices",
+  "dataset_id": "123e4567-e89b-12d3-a456-426614174004",
+  "chart_type": "bar",
+  "configuration": {
+    "xAxis": "Make",
+    "yAxis": "AvgPrice",
+    "colors": ["#9b87f5", "#7E69AB"]
+  },
+  "query_params": {
+    "filters": {
+      "Year": {"min": 2018, "max": 2023}
+    }
+  }
+}
+
+Response:
+{
+  "id": "123e4567-e89b-12d3-a456-426614174005",
+  "name": "Average Car Prices by Make",
+  "description": "Bar chart showing average prices",
+  "dataset_id": "123e4567-e89b-12d3-a456-426614174004",
+  "chart_type": "bar",
+  "configuration": {
+    "xAxis": "Make",
+    "yAxis": "AvgPrice",
+    "colors": ["#9b87f5", "#7E69AB"]
+  },
+  "query_params": {
+    "filters": {
+      "Year": {"min": 2018, "max": 2023}
+    }
+  },
+  "created_by": "123e4567-e89b-12d3-a456-426614174001",
+  "created_at": "2023-01-01T00:00:00",
+  "updated_at": "2023-01-01T00:00:00"
+}
+```
 
 ### Dashboards
 
-- `GET /api/dashboards/` - Get all dashboards
-- `GET /api/dashboards/<dashboard_id>` - Get dashboard details
-- `POST /api/dashboards/` - Create a new dashboard
-- `PUT /api/dashboards/<dashboard_id>` - Update a dashboard
-- `DELETE /api/dashboards/<dashboard_id>` - Delete a dashboard
-- `POST /api/dashboards/<dashboard_id>/charts` - Add a chart to a dashboard
-- `PUT /api/dashboards/<dashboard_id>/charts/<chart_id>` - Update chart position
-- `DELETE /api/dashboards/<dashboard_id>/charts/<chart_id>` - Remove chart from dashboard
-- `POST /api/dashboards/<dashboard_id>/comments` - Add a comment to a dashboard
-- `GET /api/dashboards/<dashboard_id>/comments` - Get dashboard comments
-- `GET /api/dashboards/<dashboard_id>/export` - Export dashboard
+#### Create Dashboard
+
+```
+POST /api/dashboards
+
+Request:
+{
+  "name": "Car Sales Dashboard",
+  "description": "Overview of car sales data",
+  "layout": {
+    "columns": 12,
+    "rowHeight": 50
+  },
+  "filters": {
+    "Year": {"type": "range", "min": 2010, "max": 2023},
+    "Make": {"type": "select", "options": ["Toyota", "Honda", "Ford"]}
+  },
+  "theme": "light",
+  "is_public": true
+}
+
+Response:
+{
+  "id": "123e4567-e89b-12d3-a456-426614174006",
+  "name": "Car Sales Dashboard",
+  "description": "Overview of car sales data",
+  "layout": {
+    "columns": 12,
+    "rowHeight": 50
+  },
+  "filters": {
+    "Year": {"type": "range", "min": 2010, "max": 2023},
+    "Make": {"type": "select", "options": ["Toyota", "Honda", "Ford"]}
+  },
+  "theme": "light",
+  "is_public": true,
+  "created_by": "123e4567-e89b-12d3-a456-426614174001",
+  "created_at": "2023-01-01T00:00:00",
+  "updated_at": "2023-01-01T00:00:00"
+}
+```
+
+#### Add Chart to Dashboard
+
+```
+POST /api/dashboards/{dashboard_id}/charts
+
+Request:
+{
+  "chart_id": "123e4567-e89b-12d3-a456-426614174005",
+  "position": {
+    "x": 0,
+    "y": 0,
+    "w": 6,
+    "h": 4
+  }
+}
+
+Response:
+{
+  "id": "123e4567-e89b-12d3-a456-426614174007",
+  "dashboard_id": "123e4567-e89b-12d3-a456-426614174006",
+  "chart_id": "123e4567-e89b-12d3-a456-426614174005",
+  "position": {
+    "x": 0,
+    "y": 0,
+    "w": 6,
+    "h": 4
+  }
+}
+```
+
+## Default Users
+
+The system comes with three default users:
+
+1. Admin
+   - Username: admin
+   - Password: admin123
+   - Role: admin
+
+2. Analyst
+   - Username: analyst
+   - Password: analyst123
+   - Role: analyst
+
+3. Regular User
+   - Username: user
+   - Password: user123
+   - Role: user
+
+## Role-Based Permissions
+
+- Admin: Full access to all features
+- Analyst: Can create and manage datasets, charts, and dashboards
+- User: Can view dashboards and charts
