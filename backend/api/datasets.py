@@ -1,4 +1,3 @@
-
 import pandas as pd
 import os
 import traceback
@@ -20,20 +19,33 @@ def get_datasets():
     page = request.args.get('page', 1, type=int)
     per_page = min(request.args.get('per_page', 20, type=int), 100)
     
-    # Query datasets
-    query = Dataset.query
-    
-    # Apply pagination
-    pagination = query.paginate(page=page, per_page=per_page)
-    
-    # Return paginated results
-    return jsonify({
-        'data': [dataset.to_dict() for dataset in pagination.items],
-        'total': pagination.total,
-        'pages': pagination.pages,
-        'page': page,
-        'per_page': per_page
-    }), 200
+    # Query datasets with proper pagination
+    try:
+        # Get all datasets
+        datasets = Dataset.query.all()
+        
+        # Manual pagination
+        total = len(datasets)
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        
+        # Slice the results
+        paginated_datasets = datasets[start_idx:end_idx]
+        
+        # Calculate total pages
+        total_pages = (total + per_page - 1) // per_page
+        
+        # Return paginated results
+        return jsonify({
+            'data': [dataset.to_dict() for dataset in paginated_datasets],
+            'total': total,
+            'pages': total_pages,
+            'page': page,
+            'per_page': per_page
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Error fetching datasets: {str(e)}")
+        return jsonify({'message': f'Error fetching datasets: {str(e)}'}), 500
 
 @datasets_bp.route('/<dataset_id>', methods=['GET'])
 @jwt_required()
