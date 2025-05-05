@@ -1,143 +1,202 @@
 
-import { ReactNode, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { 
-  BarChart3, 
-  Database, 
-  FileSpreadsheet, 
-  Grid3X3, 
-  Home, 
-  LogOut, 
-  Menu, 
-  Settings, 
+import { useState } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import {
+  BarChart3,
+  Database,
+  FileSpreadsheet,
+  Grid3X3,
+  LogOut,
+  Menu,
+  Settings,
   User,
-  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { cn } from "@/lib/utils";
-import UserAvatar from "@/components/UserAvatar";
+import UserAvatar from "./UserAvatar";
+import { ThemeToggle } from "./ThemeToggle";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useMobileWidth } from "@/hooks/use-mobile";
 
-interface LayoutProps {
-  children: ReactNode;
+interface NavItem {
+  name: string;
+  path: string;
+  icon: React.ReactNode;
 }
 
-const Layout = ({ children }: LayoutProps) => {
+const navItems: NavItem[] = [
+  {
+    name: "Dashboard",
+    path: "/dashboard",
+    icon: <Grid3X3 className="mr-2 h-4 w-4" />,
+  },
+  {
+    name: "Data Sources",
+    path: "/data-sources",
+    icon: <Database className="mr-2 h-4 w-4" />,
+  },
+  {
+    name: "Datasets",
+    path: "/datasets",
+    icon: <FileSpreadsheet className="mr-2 h-4 w-4" />,
+  },
+  {
+    name: "Charts",
+    path: "/charts",
+    icon: <BarChart3 className="mr-2 h-4 w-4" />,
+  },
+];
+
+const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const location = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const isMobile = useMobileWidth();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const navigation = [
-    { name: "Dashboard", href: "/dashboard", icon: Home },
-    { name: "Data Sources", href: "/data-sources", icon: Database },
-    { name: "Datasets", href: "/datasets", icon: FileSpreadsheet },
-    { name: "Charts", href: "/charts", icon: BarChart3 },
-    { name: "Dashboards", href: "/dashboards", icon: Grid3X3 },
-    { name: "Settings", href: "/settings", icon: Settings },
-  ];
-
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex">
-      {/* Sidebar */}
-      <aside 
-        className={cn(
-          "fixed inset-y-0 left-0 z-10 w-64 bg-white dark:bg-gray-800 shadow-lg transform transition-transform duration-200 ease-in-out md:translate-x-0",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        )}
-      >
-        <div className="h-full flex flex-col">
-          {/* Logo */}
-          <div className="px-6 py-5 flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
-            <Link to="/dashboard" className="text-xl font-bold text-primary">
-              Analytics Dashboard
+    <div className="min-h-screen flex flex-col bg-background">
+      {/* Header */}
+      <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur">
+        <div className="container flex h-16 items-center justify-between">
+          <div className="flex items-center">
+            {isMobile && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="mr-2"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              >
+                <Menu className="h-5 w-5" />
+                <span className="sr-only">Toggle menu</span>
+              </Button>
+            )}
+            <Link to="/dashboard" className="flex items-center">
+              <h1 className="text-xl font-bold">VisualX</h1>
             </Link>
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={toggleSidebar}
-              className="md:hidden"
-            >
-              <X className="h-5 w-5" />
-            </Button>
           </div>
-          
-          {/* Navigation Links */}
-          <nav className="flex-1 overflow-y-auto p-4">
-            <ul className="space-y-1">
-              {navigation.map((item) => (
-                <li key={item.name}>
-                  <Link
-                    to={item.href}
-                    className={cn(
-                      "flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                      location.pathname === item.href
-                        ? "bg-gray-100 dark:bg-gray-700 text-primary"
-                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                    )}
-                  >
-                    <item.icon className="mr-3 h-5 w-5" />
-                    {item.name}
-                  </Link>
-                </li>
+
+          {/* Desktop Navigation */}
+          {!isMobile && (
+            <nav className="mx-4 flex items-center space-x-4 lg:space-x-6">
+              {navItems.map((item) => (
+                <Link
+                  key={item.name}
+                  to={item.path}
+                  className={`flex items-center text-sm font-medium transition-colors hover:text-primary ${
+                    location.pathname === item.path
+                      ? "text-primary"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {item.icon}
+                  {item.name}
+                </Link>
               ))}
-            </ul>
-          </nav>
-          
-          {/* User Profile */}
-          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center">
-              <UserAvatar />
-              <div className="ml-3">
-                <p className="text-sm font-medium">{user?.first_name} {user?.last_name}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{user?.email}</p>
-              </div>
-            </div>
-            <Button 
-              variant="ghost" 
-              className="w-full mt-4 flex items-center justify-center"
-              onClick={logout}
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign out
-            </Button>
+            </nav>
+          )}
+
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                  <UserAvatar user={user} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="font-normal">
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium leading-none">
+                      {user?.first_name} {user?.last_name}
+                    </p>
+                    <p className="text-xs leading-none text-muted-foreground">
+                      {user?.email}
+                    </p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate("/profile")}>
+                  <User className="mr-2 h-4 w-4" />
+                  <span>Profile</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/settings")}>
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Settings</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Log out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
-      </aside>
+      </header>
 
-      {/* Main Content */}
-      <div className={cn(
-        "flex-1 transition-all duration-200 ease-in-out",
-        sidebarOpen ? "md:ml-64" : "ml-0"
-      )}>
-        {/* Header */}
-        <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
-          <div className="px-4 py-4 flex items-center justify-between">
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={toggleSidebar}
+      {/* Mobile Navigation */}
+      {isMobile && mobileMenuOpen && (
+        <div className="fixed inset-0 top-16 z-50 bg-background border-r w-56 md:hidden">
+          <nav className="flex flex-col space-y-1 p-4">
+            {navItems.map((item) => (
+              <Link
+                key={item.name}
+                to={item.path}
+                className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground ${
+                  location.pathname === item.path
+                    ? "bg-accent text-accent-foreground"
+                    : "text-muted-foreground"
+                }`}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {item.icon}
+                {item.name}
+              </Link>
+            ))}
+          </nav>
+        </div>
+      )}
+
+      {/* Main content */}
+      <main className="flex-1 container py-6">
+        {children}
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t py-6">
+        <div className="container flex flex-col md:flex-row items-center justify-between gap-4">
+          <p className="text-sm text-muted-foreground">
+            © {new Date().getFullYear()} VisualX Analytics. All rights reserved.
+          </p>
+          <div className="flex items-center gap-4">
+            <Link
+              to="/dashboard"
+              className="text-sm text-muted-foreground hover:text-foreground"
             >
-              <Menu className="h-5 w-5" />
-            </Button>
-            <div className="flex items-center">
-              <Button variant="ghost" size="icon" asChild>
-                <Link to="/settings">
-                  <User className="h-5 w-5" />
-                </Link>
-              </Button>
-            </div>
+              Dashboard
+            </Link>
+            <Link
+              to="/settings"
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              Settings
+            </Link>
           </div>
-        </header>
-        
-        {/* Page Content */}
-        <main className="p-6">
-          {children}
-        </main>
-      </div>
+        </div>
+      </footer>
     </div>
   );
 };

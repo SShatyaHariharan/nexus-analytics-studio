@@ -10,6 +10,7 @@ interface User {
   first_name: string;
   last_name: string;
   is_active: boolean;
+  role: string; // Added role
 }
 
 interface LoginData {
@@ -23,12 +24,15 @@ interface RegisterData {
   password: string;
   first_name: string;
   last_name: string;
+  role?: string; // Optional role for registration
 }
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  hasPermission: (permission: string) => boolean;
+  hasRole: (role: string | string[]) => boolean;
   login: (data: LoginData) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
@@ -38,6 +42,36 @@ interface AuthContextType {
 
 // Create context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Permission mapping by role
+const ROLE_PERMISSIONS: Record<string, string[]> = {
+  admin: [
+    "view_dashboard", "edit_dashboard", "delete_dashboard",
+    "view_datasource", "edit_datasource", "delete_datasource", 
+    "view_dataset", "edit_dataset", "delete_dataset",
+    "view_chart", "edit_chart", "delete_chart",
+    "manage_users", "view_settings", "edit_settings"
+  ],
+  manager: [
+    "view_dashboard", "edit_dashboard",
+    "view_datasource", "edit_datasource",
+    "view_dataset", "edit_dataset",
+    "view_chart", "edit_chart",
+    "view_settings"
+  ],
+  analyst: [
+    "view_dashboard",
+    "view_datasource", "edit_datasource",
+    "view_dataset", "edit_dataset",
+    "view_chart", "edit_chart"
+  ],
+  user: [
+    "view_dashboard",
+    "view_datasource",
+    "view_dataset",
+    "view_chart"
+  ]
+};
 
 // Context provider component
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -93,11 +127,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const response = await api.put(`/users/${user.id}`, data);
     setUser(response.data);
   };
+
+  // Check if user has a specific permission
+  const hasPermission = (permission: string) => {
+    if (!user) return false;
+    const role = user.role || 'user';
+    return ROLE_PERMISSIONS[role]?.includes(permission) || false;
+  };
+
+  // Check if user has a specific role
+  const hasRole = (roles: string | string[]) => {
+    if (!user) return false;
+    const userRole = user.role || 'user';
+    
+    if (Array.isArray(roles)) {
+      return roles.includes(userRole);
+    }
+    
+    return userRole === roles;
+  };
   
   const authContextValue: AuthContextType = {
     user,
     isAuthenticated: !!user,
     isLoading,
+    hasPermission,
+    hasRole,
     login,
     register,
     logout,

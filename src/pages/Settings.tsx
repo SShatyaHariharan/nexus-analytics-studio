@@ -1,248 +1,247 @@
 
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { User, Shield, Database, Bell } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
-import api from "@/services/api";
-import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { useTheme } from "@/contexts/ThemeContext";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
-const profileSchema = z.object({
-  first_name: z.string().min(1, "First name is required"),
-  last_name: z.string().min(1, "Last name is required"),
-  email: z.string().email("Please enter a valid email address"),
-});
-
-const passwordSchema = z.object({
-  current_password: z.string().min(1, "Current password is required"),
-  new_password: z.string().min(8, "Password must be at least 8 characters"),
-  confirm_password: z.string().min(8, "Confirm password is required"),
-}).refine((data) => data.new_password === data.confirm_password, {
-  message: "Passwords do not match",
-  path: ["confirm_password"],
-});
-
-type ProfileFormValues = z.infer<typeof profileSchema>;
-type PasswordFormValues = z.infer<typeof passwordSchema>;
+const ROLES = [
+  {
+    name: 'Admin',
+    description: 'Full access to all features',
+    permissions: [
+      'view_dashboard', 'edit_dashboard', 'delete_dashboard',
+      'view_datasource', 'edit_datasource', 'delete_datasource',
+      'view_dataset', 'edit_dataset', 'delete_dataset',
+      'view_chart', 'edit_chart', 'delete_chart',
+      'manage_users', 'view_settings', 'edit_settings'
+    ]
+  },
+  {
+    name: 'Manager',
+    description: 'Can create and edit most content',
+    permissions: [
+      'view_dashboard', 'edit_dashboard',
+      'view_datasource', 'edit_datasource',
+      'view_dataset', 'edit_dataset',
+      'view_chart', 'edit_chart',
+      'view_settings'
+    ]
+  },
+  {
+    name: 'Analyst',
+    description: 'Can create and edit analytical content',
+    permissions: [
+      'view_dashboard',
+      'view_datasource', 'edit_datasource',
+      'view_dataset', 'edit_dataset',
+      'view_chart', 'edit_chart'
+    ]
+  },
+  {
+    name: 'User',
+    description: 'Can view content only',
+    permissions: [
+      'view_dashboard',
+      'view_datasource',
+      'view_dataset',
+      'view_chart'
+    ]
+  }
+];
 
 const Settings = () => {
-  const { user, checkAuth } = useAuth();
-  const [isProfileSubmitting, setIsProfileSubmitting] = useState(false);
-  const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
-  
-  const profileForm = useForm<ProfileFormValues>({
-    resolver: zodResolver(profileSchema),
-    defaultValues: {
-      first_name: user?.first_name || "",
-      last_name: user?.last_name || "",
-      email: user?.email || "",
-    },
-  });
-  
-  const passwordForm = useForm<PasswordFormValues>({
-    resolver: zodResolver(passwordSchema),
-    defaultValues: {
-      current_password: "",
-      new_password: "",
-      confirm_password: "",
-    },
-  });
-  
-  const onProfileSubmit = async (data: ProfileFormValues) => {
-    try {
-      setIsProfileSubmitting(true);
-      await api.put(`/users/${user?.id}`, data);
-      await checkAuth(); // Refresh user data
-      toast.success("Profile updated successfully");
-    } catch (error) {
-      console.error("Error updating profile:", error);
-    } finally {
-      setIsProfileSubmitting(false);
+  const { user, hasPermission, hasRole } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("appearance");
+
+  // Check if user has admin permissions
+  useEffect(() => {
+    if (!hasPermission("view_settings")) {
+      navigate("/dashboard");
     }
+  }, [hasPermission, navigate]);
+
+  // Format permission string for display
+  const formatPermission = (permission: string) => {
+    return permission
+      .replace(/_/g, ' ')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   };
-  
-  const onPasswordSubmit = async (data: PasswordFormValues) => {
-    try {
-      setIsPasswordSubmitting(true);
-      await api.post("/auth/change-password", {
-        current_password: data.current_password,
-        new_password: data.new_password,
-      });
-      toast.success("Password changed successfully");
-      passwordForm.reset({
-        current_password: "",
-        new_password: "",
-        confirm_password: "",
-      });
-    } catch (error) {
-      console.error("Error changing password:", error);
-    } finally {
-      setIsPasswordSubmitting(false);
-    }
-  };
-  
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your account settings and preferences
-        </p>
+
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-200px)]">
+        Loading settings...
       </div>
-      
-      <Tabs defaultValue="profile" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="password">Password</TabsTrigger>
+    );
+  }
+
+  return (
+    <div className="container max-w-4xl py-10">
+      <h1 className="text-3xl font-bold mb-6">Settings</h1>
+
+      <Tabs defaultValue={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="mb-6">
+          <TabsTrigger value="appearance" className="flex items-center">
+            <Bell className="mr-2 h-4 w-4" />
+            Appearance
+          </TabsTrigger>
+          <TabsTrigger 
+            value="roles" 
+            className="flex items-center" 
+            disabled={!hasPermission("manage_users")}
+          >
+            <Shield className="mr-2 h-4 w-4" />
+            Roles &amp; Permissions
+          </TabsTrigger>
+          <TabsTrigger 
+            value="cache" 
+            className="flex items-center" 
+            disabled={!hasRole("admin")}
+          >
+            <Database className="mr-2 h-4 w-4" />
+            Cache Management
+          </TabsTrigger>
         </TabsList>
-        
-        <TabsContent value="profile" className="space-y-4">
+
+        <TabsContent value="appearance">
           <Card>
             <CardHeader>
-              <CardTitle>Profile Information</CardTitle>
+              <CardTitle>Appearance Settings</CardTitle>
               <CardDescription>
-                Update your personal information and email address
+                Customize the look and feel of the application
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <Form {...profileForm}>
-                <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={profileForm.control}
-                      name="first_name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>First Name</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={profileForm.control}
-                      name="last_name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Last Name</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <FormField
-                    control={profileForm.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email</FormLabel>
-                        <FormControl>
-                          <Input type="email" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button type="submit" disabled={isProfileSubmitting}>
-                    {isProfileSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      "Save Changes"
-                    )}
-                  </Button>
-                </form>
-              </Form>
+            <CardContent className="space-y-8">
+              <div className="space-y-2">
+                <h3 className="text-lg font-medium">Theme</h3>
+                <p className="text-sm text-muted-foreground">
+                  Choose between light and dark mode
+                </p>
+                <div className="flex items-center gap-4">
+                  <p className="text-sm">Current theme: <span className="font-medium">{theme === 'dark' ? 'Dark' : 'Light'}</span></p>
+                  <ThemeToggle />
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
-        
-        <TabsContent value="password" className="space-y-4">
+
+        <TabsContent value="roles">
           <Card>
             <CardHeader>
-              <CardTitle>Change Password</CardTitle>
+              <CardTitle>Roles &amp; Permissions</CardTitle>
               <CardDescription>
-                Update your password to secure your account
+                View available roles and their permissions
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Form {...passwordForm}>
-                <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
-                  <FormField
-                    control={passwordForm.control}
-                    name="current_password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Current Password</FormLabel>
-                        <FormControl>
-                          <Input type="password" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+              {ROLES.map((role) => (
+                <div key={role.name} className="mb-8">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="text-lg font-medium">{role.name}</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {role.description}
+                      </p>
+                    </div>
+                    {user.role === role.name.toLowerCase() && (
+                      <div className="bg-primary/10 text-primary px-2 py-1 rounded text-xs font-medium">
+                        Your Role
+                      </div>
                     )}
-                  />
-                  <FormField
-                    control={passwordForm.control}
-                    name="new_password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>New Password</FormLabel>
-                        <FormControl>
-                          <Input type="password" {...field} />
-                        </FormControl>
-                        <FormDescription>
-                          Password must be at least 8 characters
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={passwordForm.control}
-                    name="confirm_password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Confirm New Password</FormLabel>
-                        <FormControl>
-                          <Input type="password" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button type="submit" disabled={isPasswordSubmitting}>
-                    {isPasswordSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Changing password...
-                      </>
-                    ) : (
-                      "Change Password"
-                    )}
-                  </Button>
-                </form>
-              </Form>
+                  </div>
+                  <div className="mt-4">
+                    <h4 className="text-sm font-medium mb-2">Permissions:</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {role.permissions.map((permission) => (
+                        <div 
+                          key={permission} 
+                          className="bg-secondary text-secondary-foreground px-2 py-1 rounded-md text-xs"
+                        >
+                          {formatPermission(permission)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="cache">
+          <Card>
+            <CardHeader>
+              <CardTitle>Cache Management</CardTitle>
+              <CardDescription>
+                View and control Redis cache settings
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div>
+                <h3 className="text-lg font-medium mb-4">Cache Status</h3>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cache Type</TableHead>
+                      <TableHead>Expiry Time</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell>Charts Data</TableCell>
+                      <TableCell>5 minutes</TableCell>
+                      <TableCell className="text-green-500">Active</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell>Dashboard Data</TableCell>
+                      <TableCell>1 minute</TableCell>
+                      <TableCell className="text-green-500">Active</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell>Dataset Preview</TableCell>
+                      <TableCell>2 minutes</TableCell>
+                      <TableCell className="text-green-500">Active</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+              
+              <div className="flex justify-end space-x-2">
+                <Button variant="outline">Clear All Cache</Button>
+                <Button variant="outline">Refresh Cache Stats</Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

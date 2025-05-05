@@ -4,12 +4,15 @@ import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 // Define the form schema for validation
 const formSchema = z.object({
@@ -26,7 +29,9 @@ type FormData = z.infer<typeof formSchema>;
 const Register = () => {
   const { register: registerUser } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
   
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -41,6 +46,7 @@ const Register = () => {
 
   const onSubmit = async (data: FormData) => {
     setIsLoading(true);
+    setError("");
     try {
       await registerUser({
         username: data.username,
@@ -49,24 +55,37 @@ const Register = () => {
         first_name: data.first_name,
         last_name: data.last_name
       });
+      toast({
+        title: "Account created successfully",
+        description: "Please login with your new credentials.",
+      });
       navigate("/login");
-    } catch (error) {
-      // Error handling is done in the API interceptor
+    } catch (error: any) {
+      setError(error.response?.data?.message || "Registration failed. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12 sm:px-6 lg:px-8">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-2xl text-center">Create an Account</CardTitle>
-          <CardDescription className="text-center">Register for Nexus Analytics</CardDescription>
+          <CardDescription className="text-center">Register for VisualX Analytics</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              {error && (
+                <div className="p-3 text-sm rounded-md bg-destructive/15 text-destructive">
+                  {error}
+                </div>
+              )}
+              
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -135,7 +154,12 @@ const Register = () => {
                 )}
               />
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Creating account..." : "Register"}
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating account...
+                  </>
+                ) : "Register"}
               </Button>
             </form>
           </Form>
