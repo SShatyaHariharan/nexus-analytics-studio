@@ -60,11 +60,11 @@ const FileUploader = ({
 
     try {
       // Upload with progress tracking
-      const response = await api.post("/datasources/", formData, {
+      const response = await api.post("/datasources", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
-        onUploadProgress: (progressEvent) => {
+        onUploadProgress: (progressEvent: any) => {
           if (progressEvent.total) {
             const percentCompleted = Math.round(
               (progressEvent.loaded * 100) / progressEvent.total
@@ -77,8 +77,9 @@ const FileUploader = ({
       toast.success("File uploaded successfully");
       onUploadComplete(response.data.id);
       setFile(null);
-    } catch (error) {
-      toast.error("Error uploading file");
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      toast.error(error.response?.data?.message || "Error uploading file");
     } finally {
       setUploading(false);
     }

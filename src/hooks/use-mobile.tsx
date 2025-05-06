@@ -1,12 +1,14 @@
 
 import { useState, useEffect } from 'react';
 
-export const useMobileWidth = () => {
+const MOBILE_BREAKPOINT = 768;
+
+export const useIsMobile = () => {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     const checkIfMobile = () => {
-      setIsMobile(window.innerWidth < 768); // Standard mobile breakpoint
+      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
     };
 
     // Check on first render
@@ -21,3 +23,6 @@ export const useMobileWidth = () => {
 
   return isMobile;
 };
+
+// For backward compatibility
+export const useMobileWidth = useIsMobile;

@@ -1,4 +1,3 @@
-
 import os
 import pandas as pd
 from werkzeug.utils import secure_filename
@@ -83,7 +82,7 @@ def create_data_source():
     
     # Handle file upload
     file = request.files['file']
-    if file.filename == '':
+    if not file or file.filename == '':
         return jsonify({'message': 'No file selected'}), 400
     
     if not allowed_file(file.filename):
@@ -115,7 +114,7 @@ def create_data_source():
             type='file',
             connection_params={
                 'file_path': file_path,
-                'file_type': file.filename.rsplit('.', 1)[1].lower(),
+                'file_type': filename.rsplit('.', 1)[1].lower(),
                 'rows': len(df),
                 'columns': len(df.columns)
             },
@@ -141,6 +140,8 @@ def create_data_source():
         return jsonify(result), 201
         
     except Exception as e:
+        current_app.logger.error(f"Error processing file: {str(e)}")
+        traceback.print_exc()  # Add traceback for debugging
         return jsonify({'message': f'Error processing file: {str(e)}'}), 500
 
 @data_sources_bp.route('/<source_id>', methods=['PUT'])

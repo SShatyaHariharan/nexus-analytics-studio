@@ -1,4 +1,3 @@
-
 import pandas as pd
 import numpy as np
 import re
@@ -132,13 +131,14 @@ def detect_pii_columns(df):
     
     return pii_columns
 
-def process_file(file, file_type=None):
+def process_file(file_path):
     """
-    Process an uploaded file into a pandas DataFrame.
+    Process a file into a pandas DataFrame.
     """
-    if file_type is None:
-        # Guess file type from extension
-        filename = file.filename.lower()
+    # Identify file type from extension
+    if isinstance(file_path, str):
+        # It's a file path
+        filename = os.path.basename(file_path).lower()
         if filename.endswith('.csv'):
             file_type = 'csv'
         elif filename.endswith(('.xls', '.xlsx')):
@@ -149,38 +149,49 @@ def process_file(file, file_type=None):
             file_type = 'parquet'
         else:
             raise ValueError(f"Unsupported file type: {filename}")
-    
-    # Parse file
-    if file_type == 'csv':
-        # Try to auto-detect delimiter
-        sample = file.read(4096)
-        file.seek(0)
-        
-        if b'\t' in sample:
-            delimiter = '\t'
-        elif b';' in sample:
-            delimiter = ';'
-        else:
-            delimiter = ','
             
-        try:
-            df = pd.read_csv(file, delimiter=delimiter)
-        except Exception:
-            # Try with different encoding
-            file.seek(0)
-            df = pd.read_csv(file, delimiter=delimiter, encoding='latin1')
-    
-    elif file_type == 'excel':
-        df = pd.read_excel(file)
-    
-    elif file_type == 'json':
-        df = pd.read_json(file)
-    
-    elif file_type == 'parquet':
-        df = pd.read_parquet(file)
-    
+        # Parse file
+        if file_type == 'csv':
+            # Try to auto-detect delimiter
+            with open(file_path, 'rb') as f:
+                sample = f.read(4096)
+                
+            if b'\t' in sample:
+                delimiter = '\t'
+            elif b';' in sample:
+                delimiter = ';'
+            else:
+                delimiter = ','
+                
+            try:
+                df = pd.read_csv(file_path, delimiter=delimiter)
+            except Exception:
+                # Try with different encoding
+                df = pd.read_csv(file_path, delimiter=delimiter, encoding='latin1')
+        
+        elif file_type == 'excel':
+            df = pd.read_excel(file_path)
+        
+        elif file_type == 'json':
+            df = pd.read_json(file_path)
+        
+        elif file_type == 'parquet':
+            df = pd.read_parquet(file_path)
     else:
-        raise ValueError(f"Unsupported file type: {file_type}")
+        # It's a file object (from request.files['file'])
+        file = file_path
+        filename = file.filename.lower()
+        
+        if filename.endswith('.csv'):
+            df = pd.read_csv(file)
+        elif filename.endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(file)
+        elif filename.endswith('.json'):
+            df = pd.read_json(file)
+        elif filename.endswith('.parquet'):
+            df = pd.read_parquet(file)
+        else:
+            raise ValueError(f"Unsupported file type: {filename}")
     
     return df
 

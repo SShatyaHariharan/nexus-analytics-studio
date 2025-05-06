@@ -19,10 +19,10 @@ def get_datasets():
     page = request.args.get('page', 1, type=int)
     per_page = min(request.args.get('per_page', 20, type=int), 100)
     
-    # Query datasets with proper pagination
     try:
-        # Get all datasets
-        datasets = Dataset.query.all()
+        # Get all datasets without using query.all()
+        # Using db.session.query instead which is more reliable
+        datasets = db.session.query(Dataset).all()
         
         # Manual pagination
         total = len(datasets)

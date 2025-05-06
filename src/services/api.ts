@@ -1,25 +1,21 @@
 
 import axios from 'axios';
-import { toast } from 'sonner';
 
+// Create an instance of axios
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: 'http://localhost:5000/api',
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Add a request interceptor
+// Add a request interceptor to attach the JWT token to requests
 api.interceptors.request.use(
   (config) => {
-    // Get token from localStorage
-    const token = localStorage.getItem('access_token');
-    
-    // If token exists, add it to the headers
+    const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
     return config;
   },
   (error) => {
@@ -27,64 +23,44 @@ api.interceptors.request.use(
   }
 );
 
-// Add a response interceptor
+// Add a response interceptor to handle token expiration
 api.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response) => response,
   async (error) => {
     const originalRequest = error.config;
     
-    // If error is 401 Unauthorized and not already retrying
+    // If the error is 401 and we haven't tried to refresh the token yet
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       
       try {
         // Try to refresh the token
-        const refreshToken = localStorage.getItem('refresh_token');
-        if (refreshToken) {
-          const response = await axios.post('/api/auth/refresh', {}, {
-            headers: {
-              'Authorization': `Bearer ${refreshToken}`
-            }
-          });
-          
-          // If successful, save the new token
-          const { access_token } = response.data;
-          localStorage.setItem('access_token', access_token);
-          
-          // Update the Authorization header
-          originalRequest.headers.Authorization = `Bearer ${access_token}`;
-          
-          // Retry the original request
+        const refreshToken = localStorage.getItem('refreshToken');
+        if (!refreshToken) {
+          throw new Error('No refresh token available');
+        }
+        
+        const response = await axios.post('http://localhost:5000/api/auth/refresh', {
+          refresh_token: refreshToken
+        });
+        
+        // If we got a new token, save it and retry the original request
+        if (response.data.access_token) {
+          localStorage.setItem('token', response.data.access_token);
+          originalRequest.headers.Authorization = `Bearer ${response.data.access_token}`;
           return api(originalRequest);
         }
       } catch (refreshError) {
-        // If refresh fails, redirect to login
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
+        // If refreshing failed, redirect to login
+        localStorage.removeItem('token');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
         
-        // Show toast notification
-        toast.error('Session expired. Please log in again.');
-        
-        // If we're not on the login page, redirect
-        if (window.location.pathname !== '/login') {
+        // Only redirect to login if we're in a browser environment
+        if (typeof window !== 'undefined') {
           window.location.href = '/login';
         }
       }
-    }
-    
-    // Handle specific error types with toast notifications
-    if (error.response?.status === 400) {
-      toast.error('Bad request: Please check your input.');
-    } else if (error.response?.status === 404) {
-      toast.error('Resource not found.');
-    } else if (error.response?.status === 409) {
-      toast.error('Conflict: The resource already exists.');
-    } else if (error.response?.status === 500) {
-      toast.error('Server error: Please try again later.');
-    } else if (!error.response) {
-      toast.error('Network error: Please check your connection.');
     }
     
     return Promise.reject(error);

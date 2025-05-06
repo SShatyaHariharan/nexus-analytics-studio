@@ -26,24 +26,23 @@ This is the backend API for the VisualX data visualization and analytics platfor
    python run.py
    ```
 
-## API Documentation
+## API Documentation with cURL Examples
 
 ### Authentication
 
 #### Register User
 
 ```
-POST /api/auth/register
-
-Request:
-{
-  "username": "johndoe",
-  "email": "john@example.com",
-  "password": "securepass",
-  "first_name": "John",
-  "last_name": "Doe",
-  "role": "user"  // Optional, defaults to "user"
-}
+curl -X POST http://localhost:5000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "johndoe",
+    "email": "john@example.com",
+    "password": "securepass",
+    "first_name": "John",
+    "last_name": "Doe",
+    "role": "user"
+  }'
 
 Response:
 {
@@ -54,13 +53,12 @@ Response:
 #### Login
 
 ```
-POST /api/auth/login
-
-Request:
-{
-  "username": "johndoe",  // or email
-  "password": "securepass"
-}
+curl -X POST http://localhost:5000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "johndoe",
+    "password": "securepass"
+  }'
 
 Response:
 {
@@ -85,7 +83,8 @@ Response:
 #### List Data Sources
 
 ```
-GET /api/datasources?page=1&per_page=20
+curl -X GET http://localhost:5000/api/datasources?page=1&per_page=20 \
+  -H "Authorization: Bearer your_access_token"
 
 Response:
 {
@@ -110,7 +109,8 @@ Response:
 #### Get Data Source
 
 ```
-GET /api/datasources/{source_id}
+curl -X GET http://localhost:5000/api/datasources/your_source_id \
+  -H "Authorization: Bearer your_access_token"
 
 Response:
 {
@@ -127,21 +127,21 @@ Response:
 #### Create Data Source (JSON)
 
 ```
-POST /api/datasources
-
-Request:
-{
-  "name": "New Data Source",
-  "description": "Description of the data source",
-  "type": "database",
-  "connection_params": {
-    "host": "localhost",
-    "port": "5432",
-    "database": "mydb",
-    "user": "user",
-    "password": "password"
-  }
-}
+curl -X POST http://localhost:5000/api/datasources \
+  -H "Authorization: Bearer your_access_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "New Data Source",
+    "description": "Description of the data source",
+    "type": "database",
+    "connection_params": {
+      "host": "localhost",
+      "port": "5432",
+      "database": "mydb",
+      "user": "user",
+      "password": "password"
+    }
+  }'
 
 Response:
 {
@@ -158,13 +158,11 @@ Response:
 #### Create Data Source (File Upload)
 
 ```
-POST /api/datasources
-Content-Type: multipart/form-data
-
-Form Fields:
-- name: "Sales Data"
-- description: "Monthly sales data"
-- file: [file upload]
+curl -X POST http://localhost:5000/api/datasources \
+  -H "Authorization: Bearer your_access_token" \
+  -F "name=Sales Data" \
+  -F "description=Monthly sales data" \
+  -F "file=@/path/to/your/file.csv"
 
 Response:
 {
@@ -196,7 +194,8 @@ Response:
 #### List Datasets
 
 ```
-GET /api/datasets?page=1&per_page=20
+curl -X GET http://localhost:5000/api/datasets?page=1&per_page=20 \
+  -H "Authorization: Bearer your_access_token"
 
 Response:
 {
@@ -208,19 +207,39 @@ Response:
 }
 ```
 
-#### Create Dataset
+#### Get Dataset
 
 ```
-POST /api/datasets
+curl -X GET http://localhost:5000/api/datasets/your_dataset_id \
+  -H "Authorization: Bearer your_access_token"
 
-Request:
+Response:
 {
+  "id": "123e4567-e89b-12d3-a456-426614174004",
   "name": "Car Sales Analysis",
   "description": "Filtered car sales data",
   "source_id": "123e4567-e89b-12d3-a456-426614174000",
   "query": "SELECT Make, Model, Year, Price FROM car_sales WHERE Year > 2018",
-  "tags": ["sales", "cars", "analysis"]
+  "tags": ["sales", "cars", "analysis"],
+  "created_by": "123e4567-e89b-12d3-a456-426614174001",
+  "created_at": "2023-01-01T00:00:00",
+  "updated_at": "2023-01-01T00:00:00"
 }
+```
+
+#### Create Dataset
+
+```
+curl -X POST http://localhost:5000/api/datasets \
+  -H "Authorization: Bearer your_access_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Car Sales Analysis",
+    "description": "Filtered car sales data",
+    "source_id": "123e4567-e89b-12d3-a456-426614174000",
+    "query": "SELECT Make, Model, Year, Price FROM car_sales WHERE Year > 2018",
+    "tags": ["sales", "cars", "analysis"]
+  }'
 
 Response:
 {
@@ -239,13 +258,13 @@ Response:
 #### Execute Query
 
 ```
-POST /api/datasets/execute-query
-
-Request:
-{
-  "source_id": "123e4567-e89b-12d3-a456-426614174000",
-  "query": "SELECT Make, Model, AVG(Price) as AvgPrice FROM car_sales GROUP BY Make, Model"
-}
+curl -X POST http://localhost:5000/api/datasets/execute-query \
+  -H "Authorization: Bearer your_access_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_id": "123e4567-e89b-12d3-a456-426614174000",
+    "query": "SELECT Make, Model, AVG(Price) as AvgPrice FROM car_sales GROUP BY Make, Model"
+  }'
 
 Response:
 {
@@ -265,25 +284,25 @@ Response:
 #### Create Chart
 
 ```
-POST /api/charts
-
-Request:
-{
-  "name": "Average Car Prices by Make",
-  "description": "Bar chart showing average prices",
-  "dataset_id": "123e4567-e89b-12d3-a456-426614174004",
-  "chart_type": "bar",
-  "configuration": {
-    "xAxis": "Make",
-    "yAxis": "AvgPrice",
-    "colors": ["#9b87f5", "#7E69AB"]
-  },
-  "query_params": {
-    "filters": {
-      "Year": {"min": 2018, "max": 2023}
+curl -X POST http://localhost:5000/api/charts \
+  -H "Authorization: Bearer your_access_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Average Car Prices by Make",
+    "description": "Bar chart showing average prices",
+    "dataset_id": "123e4567-e89b-12d3-a456-426614174004",
+    "chart_type": "bar",
+    "configuration": {
+      "xAxis": "Make",
+      "yAxis": "AvgPrice",
+      "colors": ["#9b87f5", "#7E69AB"]
+    },
+    "query_params": {
+      "filters": {
+        "Year": {"min": 2018, "max": 2023}
+      }
     }
-  }
-}
+  }'
 
 Response:
 {
@@ -310,26 +329,42 @@ Response:
 
 ### Dashboards
 
+#### List Dashboards
+
+```
+curl -X GET http://localhost:5000/api/dashboards?page=1&per_page=20 \
+  -H "Authorization: Bearer your_access_token"
+
+Response:
+{
+  "data": [...],
+  "total": 5,
+  "pages": 1,
+  "page": 1,
+  "per_page": 20
+}
+```
+
 #### Create Dashboard
 
 ```
-POST /api/dashboards
-
-Request:
-{
-  "name": "Car Sales Dashboard",
-  "description": "Overview of car sales data",
-  "layout": {
-    "columns": 12,
-    "rowHeight": 50
-  },
-  "filters": {
-    "Year": {"type": "range", "min": 2010, "max": 2023},
-    "Make": {"type": "select", "options": ["Toyota", "Honda", "Ford"]}
-  },
-  "theme": "light",
-  "is_public": true
-}
+curl -X POST http://localhost:5000/api/dashboards \
+  -H "Authorization: Bearer your_access_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Car Sales Dashboard",
+    "description": "Overview of car sales data",
+    "layout": {
+      "columns": 12,
+      "rowHeight": 50
+    },
+    "filters": {
+      "Year": {"type": "range", "min": 2010, "max": 2023},
+      "Make": {"type": "select", "options": ["Toyota", "Honda", "Ford"]}
+    },
+    "theme": "light",
+    "is_public": true
+  }'
 
 Response:
 {
@@ -355,18 +390,18 @@ Response:
 #### Add Chart to Dashboard
 
 ```
-POST /api/dashboards/{dashboard_id}/charts
-
-Request:
-{
-  "chart_id": "123e4567-e89b-12d3-a456-426614174005",
-  "position": {
-    "x": 0,
-    "y": 0,
-    "w": 6,
-    "h": 4
-  }
-}
+curl -X POST http://localhost:5000/api/dashboards/your_dashboard_id/charts \
+  -H "Authorization: Bearer your_access_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "chart_id": "123e4567-e89b-12d3-a456-426614174005",
+    "position": {
+      "x": 0,
+      "y": 0,
+      "w": 6,
+      "h": 4
+    }
+  }'
 
 Response:
 {
@@ -406,3 +441,7 @@ The system comes with three default users:
 - Admin: Full access to all features
 - Analyst: Can create and manage datasets, charts, and dashboards
 - User: Can view dashboards and charts
+
+## API Testing with Postman
+
+You can import the provided `VisualX_API_Collection.json` file into Postman to test all the API endpoints. The collection includes request examples for all endpoints with pre-configured headers and example request bodies.
