@@ -1,3 +1,4 @@
+
 import pandas as pd
 import os
 import traceback
@@ -51,7 +52,8 @@ def get_datasets():
 @jwt_required()
 @cache.cached(timeout=60, key_prefix=lambda: f'dataset_{request.view_args["dataset_id"]}')
 def get_dataset(dataset_id):
-    dataset = Dataset.query.get(dataset_id)
+    # Using filter_by instead of get
+    dataset = Dataset.query.filter_by(id=dataset_id).first()
     
     if not dataset:
         return jsonify({'message': 'Dataset not found'}), 404
@@ -69,7 +71,7 @@ def create_dataset():
         return jsonify({'message': 'Name and source_id are required'}), 400
     
     # Check if the data source exists
-    source = DataSource.query.get(data.get('source_id'))
+    source = DataSource.query.filter_by(id=data.get('source_id')).first()
     if not source:
         return jsonify({'message': 'Data source not found'}), 404
     
@@ -115,7 +117,7 @@ def update_dataset(dataset_id):
     current_user_id = get_jwt_identity()
     data = request.json
     
-    dataset = Dataset.query.get(dataset_id)
+    dataset = Dataset.query.filter_by(id=dataset_id).first()
     if not dataset:
         return jsonify({'message': 'Dataset not found'}), 404
     
@@ -163,7 +165,7 @@ def update_dataset(dataset_id):
 def delete_dataset(dataset_id):
     current_user_id = get_jwt_identity()
     
-    dataset = Dataset.query.get(dataset_id)
+    dataset = Dataset.query.filter_by(id=dataset_id).first()
     if not dataset:
         return jsonify({'message': 'Dataset not found'}), 404
     
@@ -183,13 +185,14 @@ def preview_dataset(dataset_id):
     # Optional parameter for limiting rows
     limit = min(request.args.get('limit', 100, type=int), 1000)
     
-    dataset = Dataset.query.get(dataset_id)
+    # Using filter_by instead of get
+    dataset = Dataset.query.filter_by(id=dataset_id).first()
     if not dataset:
         return jsonify({'message': 'Dataset not found'}), 404
     
     try:
         # Get the data source
-        source = DataSource.query.get(dataset.source_id)
+        source = DataSource.query.filter_by(id=dataset.source_id).first()
         if not source:
             return jsonify({'message': 'Data source not found'}), 404
         
@@ -245,7 +248,7 @@ def execute_query():
     if not data.get('query'):
         return jsonify({'message': 'Query is required'}), 400
     
-    source = DataSource.query.get(data.get('source_id'))
+    source = DataSource.query.filter_by(id=data.get('source_id')).first()
     if not source:
         return jsonify({'message': 'Data source not found'}), 404
     
