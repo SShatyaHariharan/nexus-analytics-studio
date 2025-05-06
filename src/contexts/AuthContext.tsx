@@ -84,21 +84,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const token = localStorage.getItem("token");
     if (token) {
       try {
-        const response = await api.get("/auth/me");
+        const response = await api.get("auth/me");
         setUser(response.data);
         setIsLoading(false);
-        return true;
       } catch (error) {
         console.error("Authentication check failed:", error);
         localStorage.removeItem("token");
         localStorage.removeItem("refreshToken");
         setUser(null);
         setIsLoading(false);
-        return false;
       }
     } else {
       setIsLoading(false);
-      return false;
     }
   };
   
@@ -109,7 +106,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
   // Login function
   const login = async (data: LoginData) => {
-    const response = await api.post("/auth/login", data);
+    const response = await api.post("auth/login", data);
     const { access_token, refresh_token, user } = response.data;
     
     localStorage.setItem("token", access_token);
@@ -119,7 +116,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
   // Register function
   const register = async (data: RegisterData) => {
-    await api.post("/auth/register", data);
+    await api.post("auth/register", data);
   };
   
   // Logout function
@@ -133,7 +130,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const updateProfile = async (data: Partial<User>) => {
     if (!user) return;
     
-    const response = await api.put(`/users/${user.id}`, data);
+    const response = await api.put(`users/${user.id}`, data);
     setUser(response.data);
   };
 
