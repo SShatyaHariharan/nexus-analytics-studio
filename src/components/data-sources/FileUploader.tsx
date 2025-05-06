@@ -44,7 +44,10 @@ const FileUploader = ({
   };
 
   const handleUpload = async () => {
-    if (!file) return;
+    if (!file) {
+      toast.error("Please select a file first");
+      return;
+    }
 
     // Create form data
     const formData = new FormData();
@@ -59,10 +62,12 @@ const FileUploader = ({
     setProgress(0);
 
     try {
-      // Upload with progress tracking
-      const response = await api.post("/datasources", formData, {
+      console.log("Uploading file with FormData:", formData);
+      
+      // Upload with progress tracking - ensure the endpoint has trailing slash
+      const response = await api.post("/datasources/", formData, {
         headers: {
-          "Content-Type": "multipart/form-data",
+          "Content-Type": "multipart/form-data", 
         },
         onUploadProgress: (progressEvent: any) => {
           if (progressEvent.total) {
