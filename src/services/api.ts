@@ -52,7 +52,7 @@ api.interceptors.response.use(
         }
       } catch (refreshError) {
         console.error("Error refreshing token:", refreshError);
-        // If refreshing failed, redirect to login
+        // If refreshing failed, clear token storage
         localStorage.removeItem('token');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');
